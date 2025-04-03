@@ -3,25 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment Successful</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Payment Status</title>
 </head>
-<body class="flex items-center justify-center min-h-screen bg-green-100">
-    <div class="bg-white p-8 rounded-lg shadow-xl text-center transform scale-90 animate-fadeIn">
-        <div class="text-green-500 text-7xl animate-bounce">✅</div>
-        <h1 class="text-3xl font-bold text-green-600 mt-4">Payment Successful!</h1>
-        <p class="text-gray-700 mt-2">"Congratulations! You've earned the Master of Ceremony badge!"</p>
-        <p class="text-gray-500">Your payment has been processed successfully.</p>
-    </div>
+<body>
+    <h1>Payment Status</h1>
+    <p id="message">Processing...</p>
 
-    <style>
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.8); }
-            to { opacity: 1; transform: scale(1); }
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const sessionId = urlParams.get("session_id");
+
+        if (sessionId) {
+            document.getElementById("message").innerText = "Payment Successful! You may verify it manually.";
+        } else {
+            document.getElementById("message").innerText = "Payment Failed! Please try again.";
         }
-        .animate-fadeIn {
-            animation: fadeIn 0.8s ease-out forwards;
-        }
-    </style>
+    </script>
 </body>
 </html>

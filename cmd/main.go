@@ -28,7 +28,7 @@ func main() {
 
 	ClientRepo := repository.NewClientRepository(db)
 
-	err = grpc.StartgRPCServer(ClientRepo, log)
+	err = grpc.StartgRPCServer(ClientRepo, log, configEnv)
 
 	if err != nil {
 		log.Error("Faile to start gRPC server", err)

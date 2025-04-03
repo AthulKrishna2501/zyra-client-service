@@ -7,10 +7,13 @@ import (
 )
 
 type Config struct {
-	PORT              string `mapstructure:"PORT"`
-	DB_URL            string `mapstructure:"DB_URL"`
-	STRIPE_SECRET_KEY string `mapstructure:"STRIPE_SECRET_KEY"`
+	PORT                  string `mapstructure:"PORT"`
+	DB_URL                string `mapstructure:"DB_URL"`
+	STRIPE_SECRET_KEY     string `mapstructure:"STRIPE_SECRET_KEY"`
 	STRIPE_WEBHOOK_SECRET string `mapstructure:"STRIPE_WEBHOOK_SECRET"`
+	ADMIN_EMAIL           string `mapstructure:"ADMIN_EMAIL"`
+	STRIPE_SUCCESS_URL    string `mapstructure:"STRIPE_SUCCESS_URL"`
+	STRIPE_CANCEL_URL     string `mapstructure:"STRIPE_CANCEL_URL"`
 }
 
 func LoadConfig() (cfg Config, err error) {
