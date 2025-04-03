@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 
 	pb "github.com/AthulKrishna2501/proto-repo/client"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/app/config"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/core/repository"
+	"github.com/AthulKrishna2501/zyra-client-service/internals/logger"
 	"github.com/stripe/stripe-go/v76"
 	"github.com/stripe/stripe-go/v76/checkout/session"
 )
@@ -17,10 +17,11 @@ type ClientService struct {
 	pb.UnimplementedClientServiceServer
 	clientRepo repository.ClientRepository
 	config     config.Config
+	log        logger.Logger
 }
 
-func NewClientService(clientRepo repository.ClientRepository, cfg config.Config) *ClientService {
-	return &ClientService{clientRepo: clientRepo, config: cfg}
+func NewClientService(clientRepo repository.ClientRepository, cfg config.Config, logger logger.Logger) *ClientService {
+	return &ClientService{clientRepo: clientRepo, config: cfg, log: logger}
 }
 
 func (s *ClientService) GetMasterOfCeremony(ctx context.Context, req *pb.MasterOfCeremonyRequest) (*pb.MasterOfCeremonyResponse, error) {
@@ -56,8 +57,8 @@ func (s *ClientService) GetMasterOfCeremony(ctx context.Context, req *pb.MasterO
 }
 
 func (s *ClientService) HandleStripeEvent(ctx context.Context, req *pb.StripeWebhookRequest) (*pb.StripeWebhookResponse, error) {
-	log.Printf("🔹 Received Stripe Event: %s", req.EventType)
-	log.Printf("🔹 Raw Payload: %s", req.Payload)
+	s.log.Info("Received Stripe Event: %s", req.EventType)
+	s.log.Info("Raw Payload: %s", req.Payload)
 	var event stripe.Event
 	err := json.Unmarshal([]byte(req.Payload), &event)
 	if err != nil {
@@ -77,14 +78,13 @@ func (s *ClientService) HandleStripeEvent(ctx context.Context, req *pb.StripeWeb
 			return nil, fmt.Errorf("client ID not found in metadata")
 		}
 
-		fmt.Printf("Payment successful! Session ID: %s\n", session.ID)
+		s.log.Info("Payment successful! Session ID: %s\n", session.ID)
 		err = s.clientRepo.UpdateMasterOfCeremonyStatus(clientID, true)
 		if err != nil {
-			fmt.Println("Error updating database:", err)
 			return nil, fmt.Errorf("failed to update Master of Ceremony status: %v", err)
 		}
 	default:
-		fmt.Printf("ℹReceived unknown event: %s\n", req.EventType)
+		s.log.Info("Received unknown event: %s\n", req.EventType)
 	}
 
 	return &pb.StripeWebhookResponse{Status: "Success"}, nil
@@ -98,7 +98,7 @@ func (s *ClientService) VerifyPayment(ctx context.Context, req *pb.VerifyPayment
 	}
 
 	if stripeSession.PaymentStatus == stripe.CheckoutSessionPaymentStatusPaid {
-		err := s.clientRepo.CreditAdminWallet(amount, "admin@example.com")
+		err := s.clientRepo.CreditAdminWallet(amount, s.config.ADMIN_EMAIL)
 		if err != nil {
 			return nil, fmt.Errorf("failed to update createAdminWallet %v", err.Error())
 		}

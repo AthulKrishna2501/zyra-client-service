@@ -23,7 +23,7 @@ func StartgRPCServer(ClientRepo repository.ClientRepository, log logger.Logger, 
 			grpc.MaxRecvMsgSize(1024*1024*100),
 			grpc.MaxSendMsgSize(1024*1024*100),
 		)
-		ClientService := services.NewClientService(ClientRepo, cfg)
+		ClientService := services.NewClientService(ClientRepo, cfg,log)
 		client.RegisterClientServiceServer(grpcServer, ClientService)
 
 		log.Info("gRPC Server started on port 5002")
