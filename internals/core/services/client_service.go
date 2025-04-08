@@ -11,6 +11,8 @@ import (
 	"github.com/AthulKrishna2501/zyra-client-service/internals/logger"
 	"github.com/stripe/stripe-go/v76"
 	"github.com/stripe/stripe-go/v76/checkout/session"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type ClientService struct {
@@ -112,4 +114,26 @@ func (s *ClientService) VerifyPayment(ctx context.Context, req *pb.VerifyPayment
 			Message: "The payment was not completed or was canceled.",
 		}, nil
 	}
+}
+
+func (s *ClientService) ClientDashboard(ctx context.Context, req *pb.LandingPageRequest) (*pb.LandingPageResponse, error) {
+	categories, err := s.clientRepo.GetCategories(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "Failed to get Category")
+	}
+
+	var categoryList []*pb.Category
+	for _, cat := range categories {
+		categoryList = append(categoryList, &pb.Category{
+			CategoryId:   cat.CategoryID.String(),
+			CategoryName: cat.CategoryName,
+		})
+	}
+
+	return &pb.LandingPageResponse{
+		Data: &pb.LandingPageData{
+			Categories: categoryList,
+		},
+	}, nil
+
 }

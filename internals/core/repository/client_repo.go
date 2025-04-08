@@ -1,10 +1,12 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 
 	adminModel "github.com/AthulKrishna2501/zyra-admin-service/internals/core/models"
 	"github.com/AthulKrishna2501/zyra-auth-service/internals/core/models"
+	vendorModel "github.com/AthulKrishna2501/zyra-vendor-service/internals/core/models"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
@@ -17,6 +19,7 @@ type ClientStorage struct {
 type ClientRepository interface {
 	UpdateMasterOfCeremonyStatus(clientID string, status bool) error
 	CreditAdminWallet(amount float64, email string) error
+	GetCategories(ctx context.Context) ([]vendorModel.Category, error)
 }
 
 func NewClientRepository(db *gorm.DB) ClientRepository {
@@ -30,12 +33,10 @@ func (r *ClientStorage) UpdateMasterOfCeremonyStatus(clientID string, status boo
 		Update("master_of_ceremonies", status)
 
 	if result.Error != nil {
-		fmt.Println("Error updating Master of Ceremony:", result.Error)
 		return fmt.Errorf("failed to update Master of Ceremony status: %v", result.Error)
 	}
 
 	if result.RowsAffected == 0 {
-		fmt.Println("No client found with ID:", clientID)
 		return fmt.Errorf("no client found with ID %s", clientID)
 	}
 
@@ -53,4 +54,17 @@ func (r *ClientStorage) CreditAdminWallet(amount float64, email string) error {
 
 	return nil
 
+}
+
+func (r *ClientStorage) GetCategories(ctx context.Context) ([]vendorModel.Category, error) {
+	var categories []vendorModel.Category
+	err := r.DB.WithContext(ctx).
+		Select("category_id", "category_name").
+		Find(&categories).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to get categories for ClientDashboard: %w", err)
+	}
+
+	return categories, nil
 }

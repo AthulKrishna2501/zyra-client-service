@@ -4,6 +4,7 @@ import (
 	"log"
 
 	"github.com/AthulKrishna2501/zyra-client-service/internals/app/config"
+	"github.com/AthulKrishna2501/zyra-client-service/internals/core/models"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -26,5 +27,8 @@ func ConnectDatabase(env config.Config) *gorm.DB {
 }
 
 func AutoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate()
+	return db.AutoMigrate(
+		&models.Event{},
+		&models.EventDetails{},
+	)
 }
