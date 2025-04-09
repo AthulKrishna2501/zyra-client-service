@@ -27,8 +27,15 @@ func ConnectDatabase(env config.Config) *gorm.DB {
 }
 
 func AutoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&models.Event{},
-		&models.EventDetails{},
-	)
+	if err := db.AutoMigrate(&models.Event{}); err != nil {
+		return err
+	}
+	if err := db.AutoMigrate(&models.EventDetails{}); err != nil {
+		return err
+	}
+
+	if err := db.AutoMigrate(&models.Location{}); err != nil {
+		return err
+	}
+	return nil
 }

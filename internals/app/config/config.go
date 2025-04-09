@@ -14,11 +14,13 @@ type Config struct {
 	ADMIN_EMAIL           string `mapstructure:"ADMIN_EMAIL"`
 	STRIPE_SUCCESS_URL    string `mapstructure:"STRIPE_SUCCESS_URL"`
 	STRIPE_CANCEL_URL     string `mapstructure:"STRIPE_CANCEL_URL"`
+	CLOUD_NAME            string `mapstructure:"CLOUD_NAME"`
+	CLOUD_API_KEY         string `mapstructure:"CLOUD_API_KEY"`
+	CLOUD_SECRET          string `mapstructure:"CLOUD_SECRET"`
 }
 
 func LoadConfig() (cfg Config, err error) {
 	viper.SetConfigType("env")
-	viper.AutomaticEnv()
 
 	viper.SetConfigFile(".env")
 	if err := viper.ReadInConfig(); err == nil {
@@ -40,6 +42,8 @@ func LoadConfig() (cfg Config, err error) {
 			}
 		}
 	}
+
+	viper.AutomaticEnv()
 
 	err = viper.Unmarshal(&cfg)
 	return

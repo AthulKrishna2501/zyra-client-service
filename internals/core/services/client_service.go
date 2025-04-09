@@ -7,8 +7,11 @@ import (
 
 	pb "github.com/AthulKrishna2501/proto-repo/client"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/app/config"
+	"github.com/AthulKrishna2501/zyra-client-service/internals/core/cloudinary"
+	"github.com/AthulKrishna2501/zyra-client-service/internals/core/models"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/core/repository"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/logger"
+	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v76"
 	"github.com/stripe/stripe-go/v76/checkout/session"
 	"google.golang.org/grpc/codes"
@@ -134,6 +137,79 @@ func (s *ClientService) ClientDashboard(ctx context.Context, req *pb.LandingPage
 		Data: &pb.LandingPageData{
 			Categories: categoryList,
 		},
+	}, nil
+
+}
+
+func (s *ClientService) CreateEvent(ctx context.Context, req *pb.CreateEventRequest) (*pb.CreateEventResponse, error) {
+	s.log.Info("UserID in Client Service :", req.GetHostedBy())
+	isMasterOfCeremony, err := s.clientRepo.IsMaterofCeremony(ctx, req.GetHostedBy())
+
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to find isMasterofCeremony")
+	}
+
+	if !isMasterOfCeremony {
+		return nil, status.Error(codes.Unauthenticated, "The user is not a master of ceremony")
+	}
+
+	eventDate := req.GetDate().AsTime()
+	startTime := req.GetEventDetails().GetStartTime().AsTime()
+	endTime := req.GetEventDetails().GetEndTime().AsTime()
+
+	HostedByUUID, _ := uuid.Parse(req.GetHostedBy())
+	EventUUID, _ := uuid.Parse(req.GetEventId())
+
+	event := models.Event{
+		EventID:  EventUUID,
+		Title:    req.GetTitle(),
+		Date:     eventDate,
+		HostedBy: HostedByUUID,
+		Location: models.Location{
+			Address: req.GetLocation().GetAddress(),
+			City:    req.GetLocation().GetCity(),
+			Country: req.GetLocation().GetCountry(),
+			Lat:     req.GetLocation().GetLatitude(),
+			Lng:     req.GetLocation().GetLongitude(),
+		},
+	}
+
+	posterImage := req.GetEventDetails().GetPosterImage()
+
+	url, result, err := cloudinary.UploadImage(posterImage)
+	if err != nil {
+		s.log.Error("failed to upload image to cloudinary %v", err)
+		return nil, status.Errorf(codes.Internal, "failed to upload image to cloudinary %v", err)
+	}
+
+	s.log.Info("Image Url in cloudinary :", url)
+	s.log.Info("Result in Upload Image resp :", result)
+	EventDetails := &models.EventDetails{
+		EventID:        EventUUID,
+		Description:    req.GetEventDetails().GetDescription(),
+		StartTime:      startTime,
+		EndTime:        endTime,
+		PosterImage:    url,
+		PricePerTicket: int(req.GetEventDetails().GetPricePerTicket()),
+		TicketLimit:    int(req.GetEventDetails().GetTicketLimit()),
+	}
+
+	if err := s.clientRepo.CreateEvent(ctx, &event); err != nil {
+		s.log.Error("Error creating event: %v", err)
+
+		return nil, status.Errorf(codes.Internal, "failed to create event %v", err)
+	}
+
+	if err := s.clientRepo.CreateLocation(ctx, &event.Location); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to create location %v", err)
+	}
+
+	if err := s.clientRepo.CreateEventDetails(ctx, EventDetails); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to create event details %v", err)
+	}
+
+	return &pb.CreateEventResponse{
+		Message: "Event Created Successfully",
 	}, nil
 
 }

@@ -3,10 +3,12 @@ module github.com/AthulKrishna2501/zyra-client-service
 go 1.24.1
 
 require (
-	github.com/AthulKrishna2501/proto-repo v0.0.0-20250408045626-0564a7eeee42
+	github.com/AthulKrishna2501/proto-repo v0.0.0-20250408061732-fc591ae90d71
 	github.com/AthulKrishna2501/zyra-admin-service v0.0.0-20250401083545-7c8bb1ecefd0
 	github.com/AthulKrishna2501/zyra-auth-service v0.0.0-20250326043459-f9afef228c5c
 	github.com/AthulKrishna2501/zyra-vendor-service v0.0.0-20250407112401-f2fd68aa016d
+	github.com/cloudinary/cloudinary-go v1.7.0
+	github.com/cloudinary/cloudinary-go/v2 v2.9.1
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/uuid v1.6.0
 	github.com/sirupsen/logrus v1.9.3
@@ -21,6 +23,7 @@ require (
 	github.com/bytedance/sonic v1.13.1 // indirect
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
+	github.com/creasty/defaults v1.7.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
 	github.com/gin-contrib/sse v1.0.0 // indirect
@@ -29,6 +32,7 @@ require (
 	github.com/go-playground/validator/v10 v10.25.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
+	github.com/gorilla/schema v1.4.1 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/pgx/v5 v5.5.5 // indirect

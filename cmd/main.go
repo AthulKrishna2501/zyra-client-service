@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/AthulKrishna2501/zyra-client-service/internals/app/config"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/app/grpc"
+	"github.com/AthulKrishna2501/zyra-client-service/internals/core/cloudinary"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/core/database"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/core/repository"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/logger"
@@ -18,6 +19,9 @@ func main() {
 		log.Error("Error in config .env: %v", err)
 		return
 	}
+
+	cloudinary.InitCloudinary(configEnv)
+	log.Info("Cloudinary Initiated successfully")
 
 	stripe.Key = configEnv.STRIPE_SECRET_KEY
 	db := database.ConnectDatabase(configEnv)

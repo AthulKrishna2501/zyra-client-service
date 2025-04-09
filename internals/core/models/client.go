@@ -21,16 +21,14 @@ type Transaction struct {
 
 type Event struct {
 	ID        uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	EventID   string         `gorm:"type:varchar(255);uniqueIndex;not null"`
+	EventID   uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex"`
 	Title     string         `gorm:"type:varchar(255);not null"`
 	Location  Location       `json:"location" gorm:"embedded;embeddedPrefix:location_"`
 	HostedBy  uuid.UUID      `gorm:"type:uuid;not null;index"`
-	User      authModel.User `gorm:"foreignKey:HostedBy;references:ID"`
+	User      authModel.User `gorm:"foreignKey:HostedBy;references:UserID"`
 	Date      time.Time      `gorm:"type:date;not null;index"`
 	CreatedAt time.Time      `gorm:"autoCreateTime"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime"`
-
-	EventDetails *EventDetails `gorm:"foreignKey:EventID;references:ID"`
 }
 
 type Location struct {
@@ -52,5 +50,5 @@ type EventDetails struct {
 	TicketsSold    int       `gorm:"default:0"`
 	TicketLimit    int       `gorm:"not null"`
 
-	Event *Event `gorm:"foreignKey:EventID;references:ID"`
+	Event *Event `gorm:"foreignKey:EventID;references:EventID"`
 }

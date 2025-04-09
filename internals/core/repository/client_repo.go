@@ -6,6 +6,7 @@ import (
 
 	adminModel "github.com/AthulKrishna2501/zyra-admin-service/internals/core/models"
 	"github.com/AthulKrishna2501/zyra-auth-service/internals/core/models"
+	clientModel "github.com/AthulKrishna2501/zyra-client-service/internals/core/models"
 	vendorModel "github.com/AthulKrishna2501/zyra-vendor-service/internals/core/models"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -20,6 +21,10 @@ type ClientRepository interface {
 	UpdateMasterOfCeremonyStatus(clientID string, status bool) error
 	CreditAdminWallet(amount float64, email string) error
 	GetCategories(ctx context.Context) ([]vendorModel.Category, error)
+	CreateEvent(ctx context.Context, event *clientModel.Event) error
+	CreateEventDetails(ctx context.Context, eventDetails *clientModel.EventDetails) error
+	CreateLocation(ctx context.Context, location *clientModel.Location) error
+	IsMaterofCeremony(ctx context.Context, clientID string) (bool, error)
 }
 
 func NewClientRepository(db *gorm.DB) ClientRepository {
@@ -67,4 +72,42 @@ func (r *ClientStorage) GetCategories(ctx context.Context) ([]vendorModel.Catego
 	}
 
 	return categories, nil
+}
+
+func (r *ClientStorage) CreateEvent(ctx context.Context, event *clientModel.Event) error {
+	err := r.DB.WithContext(ctx).Create(&event).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+func (r *ClientStorage) CreateEventDetails(ctx context.Context, eventDetails *clientModel.EventDetails) error {
+	err := r.DB.WithContext(ctx).Create(&eventDetails).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ClientStorage) CreateLocation(ctx context.Context, location *clientModel.Location) error {
+	err := r.DB.WithContext(ctx).Create(&location).Error
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (r *ClientStorage) IsMaterofCeremony(ctx context.Context, clientID string) (bool, error) {
+	var isMC bool
+	if err := r.DB.WithContext(ctx).Select("master_of_ceremonies").Table("user_details").Where("user_id = ?", clientID).Scan(&isMC).Error; err != nil {
+		return false, err
+	}
+
+	return isMC,nil
+
 }
