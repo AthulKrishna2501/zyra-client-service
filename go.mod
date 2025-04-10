@@ -3,11 +3,10 @@ module github.com/AthulKrishna2501/zyra-client-service
 go 1.24.1
 
 require (
-	github.com/AthulKrishna2501/proto-repo v0.0.0-20250408061732-fc591ae90d71
+	github.com/AthulKrishna2501/proto-repo v0.0.0-20250409083343-8a4e0d9037b4
 	github.com/AthulKrishna2501/zyra-admin-service v0.0.0-20250401083545-7c8bb1ecefd0
 	github.com/AthulKrishna2501/zyra-auth-service v0.0.0-20250326043459-f9afef228c5c
 	github.com/AthulKrishna2501/zyra-vendor-service v0.0.0-20250407112401-f2fd68aa016d
-	github.com/cloudinary/cloudinary-go v1.7.0
 	github.com/cloudinary/cloudinary-go/v2 v2.9.1
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/uuid v1.6.0

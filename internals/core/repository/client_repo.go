@@ -25,6 +25,9 @@ type ClientRepository interface {
 	CreateEventDetails(ctx context.Context, eventDetails *clientModel.EventDetails) error
 	CreateLocation(ctx context.Context, location *clientModel.Location) error
 	IsMaterofCeremony(ctx context.Context, clientID string) (bool, error)
+	UpdateEvent(ctx context.Context, event *clientModel.Event) error
+	UpdateLocation(ctx context.Context, location *clientModel.Location) error
+	UpdateEventDetails(ctx context.Context, details *clientModel.EventDetails) error
 }
 
 func NewClientRepository(db *gorm.DB) ClientRepository {
@@ -108,6 +111,21 @@ func (r *ClientStorage) IsMaterofCeremony(ctx context.Context, clientID string) 
 		return false, err
 	}
 
-	return isMC,nil
+	return isMC, nil
 
+}
+
+func (r *ClientStorage) UpdateEvent(ctx context.Context, event *clientModel.Event) error {
+	result := r.DB.WithContext(ctx).Save(event)
+	return result.Error
+}
+
+func (r *ClientStorage) UpdateLocation(ctx context.Context, location *clientModel.Location) error {
+	result := r.DB.WithContext(ctx).Save(location)
+	return result.Error
+}
+
+func (r *ClientStorage) UpdateEventDetails(ctx context.Context, details *clientModel.EventDetails) error {
+	result := r.DB.WithContext(ctx).Save(details)
+	return result.Error
 }

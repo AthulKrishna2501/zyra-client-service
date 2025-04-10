@@ -213,3 +213,59 @@ func (s *ClientService) CreateEvent(ctx context.Context, req *pb.CreateEventRequ
 	}, nil
 
 }
+
+func (s *ClientService) EditEvent(ctx context.Context, req *pb.EditEventRequest) (*pb.EditEventResponse, error) {
+	s.log.Info("Editing Event with ID :", req.GetEventId())
+
+	EventUUID, err := uuid.Parse(req.GetEventId())
+
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid Event ID %v", err)
+	}
+
+	HostedUUID, err := uuid.Parse(req.GetHostedBy())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "Invalid HostedBy ID %v", err)
+	}
+
+	event := models.Event{
+		EventID:  EventUUID,
+		Title:    req.GetTitle(),
+		Date:     req.GetDate().AsTime(),
+		HostedBy: HostedUUID,
+		Location: models.Location{
+			Address: req.GetLocation().Address,
+			City:    req.GetLocation().City,
+			Country: req.GetLocation().Country,
+			Lat:     req.GetLocation().Latitude,
+			Lng:     req.GetLocation().Longitude,
+		},
+	}
+
+	EventDetails := &models.EventDetails{
+		EventID:        EventUUID,
+		Description:    req.GetEventDetails().GetDescription(),
+		StartTime:      req.GetEventDetails().GetStartTime().AsTime(),
+		EndTime:        req.GetEventDetails().EndTime.AsTime(),
+		PricePerTicket: int(req.GetEventDetails().GetPricePerTicket()),
+		TicketLimit:    int(req.GetEventDetails().GetTicketLimit()),
+	}
+
+	if err := s.clientRepo.UpdateEvent(ctx, &event); err != nil {
+		s.log.Error("Error updating event: %v", err)
+		return nil, status.Errorf(codes.Internal, "failed to update event: %v", err)
+	}
+
+	if err := s.clientRepo.UpdateLocation(ctx, &event.Location); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to update location: %v", err)
+	}
+
+	if err := s.clientRepo.UpdateEventDetails(ctx, EventDetails); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to update event details: %v", err)
+	}
+
+	return &pb.EditEventResponse{
+		Message: "Event updated successfully",
+	}, nil
+
+}
