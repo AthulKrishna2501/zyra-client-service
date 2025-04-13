@@ -256,9 +256,9 @@ func (s *ClientService) EditEvent(ctx context.Context, req *pb.EditEventRequest)
 		return nil, status.Errorf(codes.Internal, "failed to update event: %v", err)
 	}
 
-	if err := s.clientRepo.UpdateLocation(ctx, &event.Location); err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to update location: %v", err)
-	}
+	// if err := s.clientRepo.UpdateLocation(ctx, &event.Location); err != nil {
+	// 	return nil, status.Errorf(codes.Internal, "failed to update location: %v", err)
+	// }
 
 	if err := s.clientRepo.UpdateEventDetails(ctx, EventDetails); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to update event details: %v", err)
