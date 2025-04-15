@@ -2,10 +2,11 @@ package services
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	pb "github.com/AthulKrishna2501/proto-repo/client"
+
+	authModel "github.com/AthulKrishna2501/zyra-auth-service/internals/core/models"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/app/config"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/core/cloudinary"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/core/models"
@@ -59,40 +60,6 @@ func (s *ClientService) GetMasterOfCeremony(ctx context.Context, req *pb.MasterO
 	return &pb.MasterOfCeremonyResponse{
 		Url: stripeSession.URL,
 	}, nil
-}
-
-func (s *ClientService) HandleStripeEvent(ctx context.Context, req *pb.StripeWebhookRequest) (*pb.StripeWebhookResponse, error) {
-	s.log.Info("Received Stripe Event: %s", req.EventType)
-	s.log.Info("Raw Payload: %s", req.Payload)
-	var event stripe.Event
-	err := json.Unmarshal([]byte(req.Payload), &event)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse event: %v", err)
-	}
-
-	switch req.EventType {
-	case "checkout.session.completed":
-		var session stripe.CheckoutSession
-		err := json.Unmarshal(event.Data.Raw, &session)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse session: %v", err)
-		}
-
-		clientID, ok := session.Metadata["client_id"]
-		if !ok {
-			return nil, fmt.Errorf("client ID not found in metadata")
-		}
-
-		s.log.Info("Payment successful! Session ID: %s\n", session.ID)
-		err = s.clientRepo.UpdateMasterOfCeremonyStatus(clientID, true)
-		if err != nil {
-			return nil, fmt.Errorf("failed to update Master of Ceremony status: %v", err)
-		}
-	default:
-		s.log.Info("Received unknown event: %s\n", req.EventType)
-	}
-
-	return &pb.StripeWebhookResponse{Status: "Success"}, nil
 }
 
 func (s *ClientService) VerifyPayment(ctx context.Context, req *pb.VerifyPaymentRequest) (*pb.VerifyPaymentResponse, error) {
@@ -256,10 +223,6 @@ func (s *ClientService) EditEvent(ctx context.Context, req *pb.EditEventRequest)
 		return nil, status.Errorf(codes.Internal, "failed to update event: %v", err)
 	}
 
-	// if err := s.clientRepo.UpdateLocation(ctx, &event.Location); err != nil {
-	// 	return nil, status.Errorf(codes.Internal, "failed to update location: %v", err)
-	// }
-
 	if err := s.clientRepo.UpdateEventDetails(ctx, EventDetails); err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to update event details: %v", err)
 	}
@@ -268,4 +231,45 @@ func (s *ClientService) EditEvent(ctx context.Context, req *pb.EditEventRequest)
 		Message: "Event updated successfully",
 	}, nil
 
+}
+
+func (s *ClientService) GetClientProfile(ctx context.Context, req *pb.GetClientProfileRequest) (*pb.GetClientProfileResponse, error) {
+	clientID := req.GetClientId()
+
+	userDetails, err := s.clientRepo.GetUserDetailsByID(ctx, clientID)
+	if err != nil {
+		s.log.Error("Failed to fetch client profile: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch client profile: %v", err)
+	}
+
+	return &pb.GetClientProfileResponse{
+		ClientId:     userDetails.UserID.String(),
+		FirstName:    userDetails.FirstName,
+		LastName:     userDetails.LastName,
+		Email:        userDetails.User.Email,
+		ProfileImage: userDetails.ProfileImage,
+		PhoneNumber:  userDetails.Phone,
+	}, nil
+}
+
+func (s *ClientService) EditClientProfile(ctx context.Context, req *pb.EditClientProfileRequest) (*pb.EditClientProfileResponse, error) {
+	clientID := req.GetClientId()
+
+	userDetails := &authModel.UserDetails{
+		UserID:       uuid.MustParse(clientID),
+		FirstName:    req.GetFirstName(),
+		LastName:     req.GetLastName(),
+		ProfileImage: req.GetProfileImage(),
+		Phone:        req.GetPhoneNumber(),
+	}
+
+	err := s.clientRepo.UpdateUserDetails(ctx, userDetails)
+	if err != nil {
+		s.log.Error("Failed to update client profile: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to update client profile: %v", err)
+	}
+
+	return &pb.EditClientProfileResponse{
+		Message: "Client profile updated successfully",
+	}, nil
 }

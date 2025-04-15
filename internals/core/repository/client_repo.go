@@ -26,8 +26,9 @@ type ClientRepository interface {
 	CreateLocation(ctx context.Context, location *clientModel.Location) error
 	IsMaterofCeremony(ctx context.Context, clientID string) (bool, error)
 	UpdateEvent(ctx context.Context, event *clientModel.Event) error
-	// UpdateLocation(ctx context.Context, location *clientModel.Location) error
 	UpdateEventDetails(ctx context.Context, details *clientModel.EventDetails) error
+	GetUserDetailsByID(ctx context.Context, clientID string) (*models.UserDetails, error)
+	UpdateUserDetails(ctx context.Context, userDetails *models.UserDetails) error
 }
 
 func NewClientRepository(db *gorm.DB) ClientRepository {
@@ -123,4 +124,24 @@ func (r *ClientStorage) UpdateEvent(ctx context.Context, event *clientModel.Even
 func (r *ClientStorage) UpdateEventDetails(ctx context.Context, details *clientModel.EventDetails) error {
 	result := r.DB.Model(&details).Where("event_id = ?", details.EventID).Updates(&details)
 	return result.Error
+}
+
+func (r *ClientStorage) GetUserDetailsByID(ctx context.Context, clientID string) (*models.UserDetails, error) {
+	var userDetails models.UserDetails
+	err := r.DB.WithContext(ctx).
+		Preload("User").
+		Where("user_id = ?", clientID).
+		First(&userDetails).Error
+	if err != nil {
+		return nil, err
+	}
+	return &userDetails, nil
+}
+
+func (r *ClientStorage) UpdateUserDetails(ctx context.Context, userDetails *models.UserDetails) error {
+	err := r.DB.WithContext(ctx).
+		Model(&models.UserDetails{}).
+		Where("user_id = ?", userDetails.UserID).
+		Updates(userDetails).Error
+	return err
 }

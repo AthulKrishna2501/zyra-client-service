@@ -4,6 +4,7 @@ import (
 	"net"
 
 	"github.com/AthulKrishna2501/proto-repo/client"
+
 	"github.com/AthulKrishna2501/zyra-client-service/internals/app/config"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/core/repository"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/core/services"
@@ -23,7 +24,7 @@ func StartgRPCServer(ClientRepo repository.ClientRepository, log logger.Logger, 
 			grpc.MaxRecvMsgSize(1024*1024*100),
 			grpc.MaxSendMsgSize(1024*1024*100),
 		)
-		ClientService := services.NewClientService(ClientRepo, cfg,log)
+		ClientService := services.NewClientService(ClientRepo, cfg, log)
 		client.RegisterClientServiceServer(grpcServer, ClientService)
 
 		log.Info("gRPC Server started on port 5002")

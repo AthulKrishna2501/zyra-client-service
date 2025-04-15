@@ -1,9 +1,9 @@
 module github.com/AthulKrishna2501/zyra-client-service
 
-go 1.24.1
+go 1.24.2
 
 require (
-	github.com/AthulKrishna2501/proto-repo v0.0.0-20250409083343-8a4e0d9037b4
+	github.com/AthulKrishna2501/proto-repo v0.0.0-20250414090546-d4952a108598
 	github.com/AthulKrishna2501/zyra-admin-service v0.0.0-20250401083545-7c8bb1ecefd0
 	github.com/AthulKrishna2501/zyra-auth-service v0.0.0-20250326043459-f9afef228c5c
 	github.com/AthulKrishna2501/zyra-vendor-service v0.0.0-20250407112401-f2fd68aa016d
@@ -65,3 +65,5 @@ require (
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/AthulKrishna2501/proto-repo => ../proto-repo
