@@ -8,6 +8,7 @@ import (
 	"github.com/AthulKrishna2501/zyra-auth-service/internals/core/models"
 	clientModel "github.com/AthulKrishna2501/zyra-client-service/internals/core/models"
 	vendorModel "github.com/AthulKrishna2501/zyra-vendor-service/internals/core/models"
+	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"gorm.io/gorm"
@@ -29,6 +30,10 @@ type ClientRepository interface {
 	UpdateEventDetails(ctx context.Context, details *clientModel.EventDetails) error
 	GetUserDetailsByID(ctx context.Context, clientID string) (*models.UserDetails, error)
 	UpdateUserDetails(ctx context.Context, userDetails *models.UserDetails) error
+	GetUserByID(ctx context.Context, clientID string) (*models.User, error)
+	VerifyPassword(hashedPassword, password string) bool
+	HashPassword(password string) (string, error)
+	UpdatePassword(ctx context.Context, clientID, hashedPassword string) error
 }
 
 func NewClientRepository(db *gorm.DB) ClientRepository {
@@ -143,5 +148,35 @@ func (r *ClientStorage) UpdateUserDetails(ctx context.Context, userDetails *mode
 		Model(&models.UserDetails{}).
 		Where("user_id = ?", userDetails.UserID).
 		Updates(userDetails).Error
+	return err
+}
+
+func (r *ClientStorage) GetUserByID(ctx context.Context, clientID string) (*models.User, error) {
+	var user models.User
+	err := r.DB.WithContext(ctx).Where("user_id = ?", clientID).First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (r *ClientStorage) VerifyPassword(hashedPassword, password string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(password))
+	return err == nil
+}
+
+func (r *ClientStorage) HashPassword(password string) (string, error) {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(hashedPassword), nil
+}
+
+func (r *ClientStorage) UpdatePassword(ctx context.Context, clientID, hashedPassword string) error {
+	err := r.DB.WithContext(ctx).
+		Model(&models.User{}).
+		Where("user_id = ?", clientID).
+		Update("password", hashedPassword).Error
 	return err
 }

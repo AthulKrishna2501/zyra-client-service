@@ -273,3 +273,40 @@ func (s *ClientService) EditClientProfile(ctx context.Context, req *pb.EditClien
 		Message: "Client profile updated successfully",
 	}, nil
 }
+
+func (s *ClientService) ResetPassword(ctx context.Context, req *pb.ResetPasswordRequest) (*pb.ResetPasswordResponse, error) {
+	clientID := req.GetClientId()
+	currentPassword := req.GetCurrentPassword()
+	newPassword := req.GetNewPassword()
+	confirmPassword := req.GetConfirmPassword()
+
+	if newPassword != confirmPassword {
+		return nil, status.Errorf(codes.InvalidArgument, "New password and confirm password do not match")
+	}
+
+	user, err := s.clientRepo.GetUserByID(ctx, clientID)
+	if err != nil {
+		s.log.Error("Failed to fetch user: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch user: %v", err)
+	}
+
+	if !s.clientRepo.VerifyPassword(user.Password, currentPassword) {
+		return nil, status.Errorf(codes.Unauthenticated, "Current password is incorrect")
+	}
+
+	hashedPassword, err := s.clientRepo.HashPassword(newPassword)
+	if err != nil {
+		s.log.Error("Failed to hash password: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to hash password: %v", err)
+	}
+
+	err = s.clientRepo.UpdatePassword(ctx, clientID, hashedPassword)
+	if err != nil {
+		s.log.Error("Failed to update password: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to update password: %v", err)
+	}
+
+	return &pb.ResetPasswordResponse{
+		Message: "Password reset successfully",
+	}, nil
+}

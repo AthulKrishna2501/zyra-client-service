@@ -3,7 +3,7 @@ module github.com/AthulKrishna2501/zyra-client-service
 go 1.24.2
 
 require (
-	github.com/AthulKrishna2501/proto-repo v0.0.0-20250414090546-d4952a108598
+	github.com/AthulKrishna2501/proto-repo v0.0.0-20250415042030-e1b203ef659b
 	github.com/AthulKrishna2501/zyra-admin-service v0.0.0-20250401083545-7c8bb1ecefd0
 	github.com/AthulKrishna2501/zyra-auth-service v0.0.0-20250326043459-f9afef228c5c
 	github.com/AthulKrishna2501/zyra-vendor-service v0.0.0-20250407112401-f2fd68aa016d
@@ -13,6 +13,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.20.0
 	github.com/stripe/stripe-go/v76 v76.25.0
+	golang.org/x/crypto v0.36.0
 	google.golang.org/grpc v1.71.1
 	gorm.io/driver/postgres v1.5.11
 	gorm.io/gorm v1.25.12
@@ -56,7 +57,6 @@ require (
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/arch v0.15.0 // indirect
-	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/net v0.37.0 // indirect
 	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
