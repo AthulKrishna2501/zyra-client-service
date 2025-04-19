@@ -1,9 +1,11 @@
-github.com/AthulKrishna2501/zyra-admin-service v0.0.0-20250401083545-7c8bb1ecefd0 h1:6zCKHz6UGl7K1N7D+++yP4XmiySvRkvKAGo/aTfKN64=
-github.com/AthulKrishna2501/zyra-admin-service v0.0.0-20250401083545-7c8bb1ecefd0/go.mod h1:IFTxUDv1VnPoBpx8505UTEZWp48BDfi019ubls3M5hI=
-github.com/AthulKrishna2501/zyra-auth-service v0.0.0-20250326043459-f9afef228c5c h1:dx/34CESN1fNhxNgjpzg7xXFC6y32RpLyn3OPD57oJM=
-github.com/AthulKrishna2501/zyra-auth-service v0.0.0-20250326043459-f9afef228c5c/go.mod h1:O+QgY/SV46uPxtKVZdasZn5yejeHieK5M8hI2/KNZOs=
+github.com/AthulKrishna2501/zyra-admin-service v0.0.0-20250415083648-3d8accd2df3d h1:u2nsiFVNKMW0qynDdX/2iIeSp+t+hPiKqsqhcWnFTCc=
+github.com/AthulKrishna2501/zyra-admin-service v0.0.0-20250415083648-3d8accd2df3d/go.mod h1:EKXVUGGw4VxvMUTgdjKZpWYwUfA3OIMwLf6y8Xli/Wo=
+github.com/AthulKrishna2501/zyra-auth-service v0.0.0-20250413105302-d662797b6e1c h1:tH3PHLZXrhMtxgEhmluP0Hwp61Z4+HpyvReSHcbTWzU=
+github.com/AthulKrishna2501/zyra-auth-service v0.0.0-20250413105302-d662797b6e1c/go.mod h1:O+QgY/SV46uPxtKVZdasZn5yejeHieK5M8hI2/KNZOs=
 github.com/AthulKrishna2501/zyra-vendor-service v0.0.0-20250407112401-f2fd68aa016d h1:Hjk6fZBaAfGLPqJF30N+3/83tgnku05xt1gWXjuZ2bI=
 github.com/AthulKrishna2501/zyra-vendor-service v0.0.0-20250407112401-f2fd68aa016d/go.mod h1:41NdIXr95zlcL0M3DGucJWljiRjHTiIR2/7Y0Mn9ncc=
+github.com/AthulKrishna2501/zyra-vendor-service v0.0.0-20250416181922-17c85cab2a57 h1:6jC8XGKlOD7wm1e0L/ednXKFnME3ZOQ/MhrwNFiFiog=
+github.com/AthulKrishna2501/zyra-vendor-service v0.0.0-20250416181922-17c85cab2a57/go.mod h1:41NdIXr95zlcL0M3DGucJWljiRjHTiIR2/7Y0Mn9ncc=
 github.com/bytedance/sonic v1.13.1 h1:Jyd5CIvdFnkOWuKXr+wm4Nyk2h0yAFsr8ucJgEasO3g=
 github.com/bytedance/sonic v1.13.1/go.mod h1:o68xyaF9u2gvVBuGHPlUVCy+ZfmNNO5ETf1+KgkJhz4=
 github.com/bytedance/sonic/loader v0.1.1/go.mod h1:ncP89zfokxS5LZrJxl5z0UJcsk4M4yY2JpfqGeCtNLU=

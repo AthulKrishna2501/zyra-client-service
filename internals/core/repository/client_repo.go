@@ -4,10 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	"time"
+
 	adminModel "github.com/AthulKrishna2501/zyra-admin-service/internals/core/models"
 	"github.com/AthulKrishna2501/zyra-auth-service/internals/core/models"
 	clientModel "github.com/AthulKrishna2501/zyra-client-service/internals/core/models"
 	vendorModel "github.com/AthulKrishna2501/zyra-vendor-service/internals/core/models"
+
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -34,6 +38,18 @@ type ClientRepository interface {
 	VerifyPassword(hashedPassword, password string) bool
 	HashPassword(password string) (string, error)
 	UpdatePassword(ctx context.Context, clientID, hashedPassword string) error
+	GetBookingsByClientID(ctx context.Context, clientID string) ([]adminModel.Booking, error)
+	GetUpcomingEvents(ctx context.Context) ([]clientModel.Event, []clientModel.EventDetails, error)
+	GetFeaturedVendors(ctx context.Context) ([]clientModel.FeaturedVendor, error)
+	IsVendorServiceAvailable(ctx context.Context, vendorID, service string) (bool, error)
+	IsVendorAvailableOnDate(ctx context.Context, vendorID string, date time.Time) (bool, error)
+	CreateBooking(ctx context.Context, booking *adminModel.Booking) error
+	GetVendorsByCategory(ctx context.Context, category string) ([]clientModel.VendorWithDetails, error)
+	GetServicesByVendorID(ctx context.Context, vendorID uuid.UUID) ([]vendorModel.Service, error)
+	GetEventsHostedByClient(ctx context.Context, clientID string) ([]clientModel.Event, []clientModel.EventDetails, error)
+	GetVendorDetailsByID(ctx context.Context, vendorID string) (*models.UserDetails, error)
+	GetVendorCategories(ctx context.Context, vendorID string) ([]vendorModel.Category, error)
+	GetServicePrice(ctx context.Context, vendorID string, service string) (int, error)
 }
 
 func NewClientRepository(db *gorm.DB) ClientRepository {
@@ -179,4 +195,191 @@ func (r *ClientStorage) UpdatePassword(ctx context.Context, clientID, hashedPass
 		Where("user_id = ?", clientID).
 		Update("password", hashedPassword).Error
 	return err
+}
+
+func (r *ClientStorage) GetUpcomingEvents(ctx context.Context) ([]clientModel.Event, []clientModel.EventDetails, error) {
+	var events []clientModel.Event
+	err := r.DB.WithContext(ctx).
+		Where("date >= ?", time.Now()).
+		Find(&events).Error
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var eventIDs []uuid.UUID
+	for _, ev := range events {
+		eventIDs = append(eventIDs, ev.EventID)
+	}
+
+	var details []clientModel.EventDetails
+	err = r.DB.WithContext(ctx).
+		Where("event_id IN ?", eventIDs).
+		Find(&details).Error
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return events, details, nil
+}
+
+func (r *ClientStorage) GetFeaturedVendors(ctx context.Context) ([]clientModel.FeaturedVendor, error) {
+	var vendors []clientModel.FeaturedVendor
+	err := r.DB.WithContext(ctx).
+		Table("user_details").
+		Joins("JOIN users u ON u.user_id = user_details.user_id").
+		Joins("JOIN vendor_categories vc ON vc.vendor_id = u.user_id").
+		Joins("JOIN categories c ON c.category_id = vc.category_id").
+		Where("u.role = ?", "vendor").
+		Select("user_details.user_id, user_details.first_name, user_details.last_name, c.category_name as category_name").
+		Limit(10).
+		Scan(&vendors).Error
+	if err != nil {
+		return nil, err
+	}
+	return vendors, nil
+}
+
+func (r *ClientStorage) IsVendorServiceAvailable(ctx context.Context, vendorID, service string) (bool, error) {
+	var count int64
+	err := r.DB.WithContext(ctx).
+		Model(&vendorModel.Service{}).
+		Where("vendor_id = ? AND service_title = ?", vendorID, service).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (r *ClientStorage) IsVendorAvailableOnDate(ctx context.Context, vendorID string, date time.Time) (bool, error) {
+	var count int64
+	err := r.DB.WithContext(ctx).
+		Model(&vendorModel.Service{}).
+		Where("vendor_id = ? AND available_date = ?", vendorID, date).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count == 0, nil
+}
+
+func (r *ClientStorage) CreateBooking(ctx context.Context, booking *adminModel.Booking) error {
+	err := r.DB.WithContext(ctx).Create(booking).Error
+	return err
+}
+
+func (r *ClientStorage) GetBookingsByClientID(ctx context.Context, clientID string) ([]adminModel.Booking, error) {
+	var bookings []adminModel.Booking
+
+	err := r.DB.WithContext(ctx).
+		Table("bookings").
+		Joins("JOIN users ON users.user_id = bookings.vendor_id").
+		Joins("JOIN user_details ON user_details.user_id = users.user_id").
+		Where("bookings.client_id = ?", clientID).
+		Select(`
+		bookings.booking_id,
+		bookings.client_id,
+		bookings.service,
+		bookings.date,
+		bookings.price,
+		bookings.status,
+
+		users.user_id AS vendor_id,
+		user_details.first_name,
+		user_details.last_name
+	`).Scan(&bookings).Error
+
+	if err != nil {
+		return nil, err
+	}
+	return bookings, nil
+}
+
+func (r *ClientStorage) GetVendorsByCategory(ctx context.Context, category string) ([]clientModel.VendorWithDetails, error) {
+	var vendors []clientModel.VendorWithDetails
+	err := r.DB.WithContext(ctx).
+		Table("users").
+		Joins("JOIN vendor_categories vc ON vc.vendor_id = users.user_id").
+		Joins("JOIN categories c ON c.category_id = vc.category_id").
+		Joins("JOIN user_details ud ON ud.user_id = users.user_id").
+		Where("c.category_name = ?", category).
+		Select("users.user_id, ud.first_name AS user_details_name").
+		Scan(&vendors).Error
+	if err != nil {
+		return nil, err
+	}
+	return vendors, nil
+}
+
+func (r *ClientStorage) GetServicesByVendorID(ctx context.Context, vendorID uuid.UUID) ([]vendorModel.Service, error) {
+	var services []vendorModel.Service
+	err := r.DB.WithContext(ctx).
+		Where("vendor_id = ?", vendorID).
+		Find(&services).Error
+	if err != nil {
+		return nil, err
+	}
+	return services, nil
+}
+
+func (r *ClientStorage) GetEventsHostedByClient(ctx context.Context, clientID string) ([]clientModel.Event, []clientModel.EventDetails, error) {
+	var events []clientModel.Event
+	err := r.DB.WithContext(ctx).
+		Where("hosted_by = ?", clientID).
+		Find(&events).Error
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var eventIDs []uuid.UUID
+	for _, ev := range events {
+		eventIDs = append(eventIDs, ev.EventID)
+	}
+
+	var details []clientModel.EventDetails
+	err = r.DB.WithContext(ctx).
+		Where("event_id IN ?", eventIDs).
+		Find(&details).Error
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return events, details, nil
+}
+
+func (r *ClientStorage) GetVendorDetailsByID(ctx context.Context, vendorID string) (*models.UserDetails, error) {
+	var userDetails models.UserDetails
+	err := r.DB.WithContext(ctx).
+		Preload("User").
+		Where("user_id = ?", vendorID).
+		First(&userDetails).Error
+	if err != nil {
+		return nil, err
+	}
+	return &userDetails, nil
+}
+
+func (r *ClientStorage) GetVendorCategories(ctx context.Context, vendorID string) ([]vendorModel.Category, error) {
+	var categories []vendorModel.Category
+	err := r.DB.WithContext(ctx).
+		Joins("JOIN vendor_categories vc ON vc.category_id = categories.category_id").
+		Where("vc.vendor_id = ?", vendorID).
+		Find(&categories).Error
+	if err != nil {
+		return nil, err
+	}
+	return categories, nil
+}
+
+func (r *ClientStorage) GetServicePrice(ctx context.Context, vendorID string, service string) (int, error) {
+	var price int
+	err := r.DB.WithContext(ctx).
+		Table("services").
+		Where("vendor_id = ? AND service_title = ?", vendorID, service).
+		Pluck("service_price", &price).Error
+
+	if err != nil {
+		return 0, err
+	}
+	return price, nil
 }

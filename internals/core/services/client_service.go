@@ -6,6 +6,8 @@ import (
 
 	pb "github.com/AthulKrishna2501/proto-repo/client"
 
+	adminModel "github.com/AthulKrishna2501/zyra-admin-service/internals/core/models"
+
 	authModel "github.com/AthulKrishna2501/zyra-auth-service/internals/core/models"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/app/config"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/core/cloudinary"
@@ -17,6 +19,8 @@ import (
 	"github.com/stripe/stripe-go/v76/checkout/session"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type ClientService struct {
@@ -74,6 +78,11 @@ func (s *ClientService) VerifyPayment(ctx context.Context, req *pb.VerifyPayment
 		if err != nil {
 			return nil, fmt.Errorf("failed to update createAdminWallet %v", err.Error())
 		}
+
+		err = s.clientRepo.UpdateMasterOfCeremonyStatus(req.GetUserId(), true)
+		if err != nil {
+			return nil, fmt.Errorf("failed to updated master of ceremony %v", err.Error())
+		}
 		return &pb.VerifyPaymentResponse{
 			Success: true,
 			Message: "Payment successful",
@@ -89,7 +98,9 @@ func (s *ClientService) VerifyPayment(ctx context.Context, req *pb.VerifyPayment
 func (s *ClientService) ClientDashboard(ctx context.Context, req *pb.LandingPageRequest) (*pb.LandingPageResponse, error) {
 	categories, err := s.clientRepo.GetCategories(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "Failed to get Category")
+
+		s.log.Error("Failed to fetch categories: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch categories: %v", err)
 	}
 
 	var categoryList []*pb.Category
@@ -100,9 +111,59 @@ func (s *ClientService) ClientDashboard(ctx context.Context, req *pb.LandingPage
 		})
 	}
 
+	upcomingEvents, eventDetails, err := s.clientRepo.GetUpcomingEvents(ctx)
+	if err != nil {
+		s.log.Error("Failed to fetch upcoming events: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch upcoming events: %v", err)
+	}
+
+	detailsMap := make(map[uuid.UUID]models.EventDetails)
+	for _, d := range eventDetails {
+		detailsMap[d.EventID] = d
+	}
+
+	var eventList []*pb.Event
+	for _, event := range upcomingEvents {
+		detail := detailsMap[event.EventID]
+
+		eventList = append(eventList, &pb.Event{
+			EventId:     event.EventID.String(),
+			Title:       event.Title,
+			Date:        event.Date.String(),
+			Description: detail.Description,
+			Image:       detail.PosterImage,
+
+			Location: &pb.Location{
+				Address:   event.Location.Address,
+				City:      event.Location.City,
+				Country:   event.Location.Country,
+				Latitude:  event.Location.Lat,
+				Longitude: event.Location.Lng,
+			},
+		})
+	}
+
+	featuredVendors, err := s.clientRepo.GetFeaturedVendors(ctx)
+	if err != nil {
+		s.log.Error("Failed to fetch featured vendors: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch featured vendors: %v", err)
+	}
+
+	var vendorList []*pb.Vendor
+	for _, vendor := range featuredVendors {
+		vendorList = append(vendorList, &pb.Vendor{
+			VendorId: vendor.UserID.String(),
+			Name:     vendor.FirstName + " " + vendor.LastName,
+			Category: vendor.CategoryName,
+		})
+	}
+
 	return &pb.LandingPageResponse{
+		Success: true,
 		Data: &pb.LandingPageData{
-			Categories: categoryList,
+			Categories:      categoryList,
+			UpcomingEvents:  eventList,
+			FeaturedVendors: vendorList,
 		},
 	}, nil
 
@@ -308,5 +369,245 @@ func (s *ClientService) ResetPassword(ctx context.Context, req *pb.ResetPassword
 
 	return &pb.ResetPasswordResponse{
 		Message: "Password reset successfully",
+	}, nil
+}
+
+func (s *ClientService) GetBookings(ctx context.Context, req *pb.GetBookingsRequest) (*pb.GetBookingsResponse, error) {
+	clientID := req.GetClientId()
+	s.log.Info("Client id :", clientID)
+
+	bookings, err := s.clientRepo.GetBookingsByClientID(ctx, clientID)
+	if err != nil {
+		s.log.Error("Failed to fetch bookings: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch bookings: %v", err)
+	}
+
+	var bookingList []*pb.Booking
+	for _, booking := range bookings {
+		bookingList = append(bookingList, &pb.Booking{
+			BookingId: booking.BookingID.String(),
+			Vendor: &pb.Vendor{
+				VendorId: booking.VendorID.String(),
+				Name:     booking.Vendor.FirstName + "" + booking.Vendor.LastName,
+			},
+			Service: booking.Service,
+			Date:    timestamppb.New(booking.Date),
+			Price:   int32(booking.Price),
+			Status:  booking.Status,
+		})
+	}
+
+	return &pb.GetBookingsResponse{
+		Bookings: bookingList,
+	}, nil
+}
+
+func (s *ClientService) BookVendor(ctx context.Context, req *pb.BookVendorRequest) (*pb.BookVendorResponse, error) {
+	clientID := req.GetClientId()
+	vendorID := req.GetVendorId()
+	service := req.GetService()
+	date := req.GetDate().AsTime()
+
+	isServiceAvailable, err := s.clientRepo.IsVendorServiceAvailable(ctx, vendorID, service)
+	if err != nil {
+		s.log.Error("Failed to validate vendor service: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to validate vendor service: %v", err)
+	}
+	if !isServiceAvailable {
+		return nil, status.Errorf(codes.InvalidArgument, "The vendor does not provide the requested service")
+	}
+
+	isDateAvailable, err := s.clientRepo.IsVendorAvailableOnDate(ctx, vendorID, date)
+	if err != nil {
+		s.log.Error("Failed to validate vendor availability: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to validate vendor availability: %v", err)
+	}
+	if !isDateAvailable {
+		return nil, status.Errorf(codes.InvalidArgument, "The vendor is not available on the requested date")
+	}
+
+	price, err := s.clientRepo.GetServicePrice(ctx, vendorID, service)
+	if err != nil {
+		s.log.Error("Failed to fetch service price: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch service price: %v", err)
+	}
+
+	booking := &adminModel.Booking{
+		ClientID: uuid.MustParse(clientID),
+		VendorID: uuid.MustParse(vendorID),
+		Service:  service,
+		Date:     date,
+		Price:    price,
+		Status:   "pending",
+	}
+
+	err = s.clientRepo.CreateBooking(ctx, booking)
+	if err != nil {
+		s.log.Error("Failed to create booking: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to create booking: %v", err)
+	}
+
+	return &pb.BookVendorResponse{
+		Message: "Booking created successfully",
+	}, nil
+}
+
+func (s *ClientService) GetVendorsByCategory(ctx context.Context, req *pb.GetVendorsByCategoryRequest) (*pb.GetVendorsByCategoryResponse, error) {
+	category := req.GetCategory()
+
+	vendors, err := s.clientRepo.GetVendorsByCategory(ctx, category)
+	if err != nil {
+		s.log.Error("Failed to fetch vendors by category: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch vendors by category: %v", err)
+	}
+
+	var vendorList []*pb.VendorWithServices
+	for _, vendor := range vendors {
+		services, err := s.clientRepo.GetServicesByVendorID(ctx, vendor.UserID)
+		if err != nil {
+			s.log.Error("Failed to fetch services for vendor: %v", err)
+			return nil, status.Errorf(codes.Internal, "Failed to fetch services for vendor: %v", err)
+		}
+
+		var serviceList []*pb.Service
+		for _, service := range services {
+			serviceList = append(serviceList, &pb.Service{
+				ServiceId:          service.ID.String(),
+				ServiceTitle:       service.ServiceTitle,
+				ServiceDescription: service.ServiceDescription,
+				ServicePrice:       float64(service.ServicePrice),
+			})
+		}
+
+		vendorList = append(vendorList, &pb.VendorWithServices{
+			VendorId: vendor.UserID.String(),
+			Name:     vendor.UserDetailsName,
+
+			Services: serviceList,
+		})
+	}
+
+	return &pb.GetVendorsByCategoryResponse{
+		Vendors: vendorList,
+	}, nil
+}
+
+func (s *ClientService) GetHostedEvents(ctx context.Context, req *pb.GetHostedEventsRequest) (*pb.GetHostedEventsResponse, error) {
+	clientID := req.GetClientId()
+
+	events, details, err := s.clientRepo.GetEventsHostedByClient(ctx, clientID)
+	if err != nil {
+		s.log.Error("Failed to fetch hosted events: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch hosted events: %v", err)
+	}
+
+	detailsMap := make(map[uuid.UUID]models.EventDetails)
+	for _, d := range details {
+		detailsMap[d.EventID] = d
+	}
+
+	var eventList []*pb.HostedEvent
+	for _, event := range events {
+		detail, ok := detailsMap[event.EventID]
+		if !ok {
+			continue
+		}
+
+		eventList = append(eventList, &pb.HostedEvent{
+			EventId: event.EventID.String(),
+			Title:   event.Title,
+			Location: &pb.Location{
+				Address:   event.Location.Address,
+				City:      event.Location.City,
+				Country:   event.Location.Country,
+				Latitude:  event.Location.Lat,
+				Longitude: event.Location.Lng,
+			},
+			Date:           timestamppb.New(event.Date),
+			Description:    detail.Description,
+			PricePerTicket: int32(detail.PricePerTicket),
+			TicketsSold:    int32(detail.TicketsSold),
+			TicketLimit:    int32(detail.TicketLimit),
+		})
+	}
+
+	return &pb.GetHostedEventsResponse{
+		Events: eventList,
+	}, nil
+}
+
+func (s *ClientService) GetUpcomingEvents(ctx context.Context, req *pb.GetUpcomingEventsRequest) (*pb.GetUpcomingEventsResponse, error) {
+	events, details, err := s.clientRepo.GetUpcomingEvents(ctx)
+	if err != nil {
+		s.log.Error("Failed to fetch upcoming events: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch upcoming events: %v", err)
+	}
+
+	detailsMap := make(map[uuid.UUID]models.EventDetails)
+	for _, detail := range details {
+		detailsMap[detail.EventID] = detail
+	}
+
+	var eventList []*pb.UpcomingEvent
+	for _, event := range events {
+		detail := detailsMap[event.EventID]
+
+		eventList = append(eventList, &pb.UpcomingEvent{
+			EventId: event.EventID.String(),
+			Title:   event.Title,
+			Location: &pb.Location{
+				Address:   event.Location.Address,
+				City:      event.Location.City,
+				Country:   event.Location.Country,
+				Latitude:  event.Location.Lat,
+				Longitude: event.Location.Lng,
+			},
+			Date:           timestamppb.New(event.Date),
+			Description:    detail.Description,
+			PosterImage:    detail.PosterImage,
+			PricePerTicket: int32(detail.PricePerTicket),
+			TicketsSold:    int32(detail.TicketsSold),
+			TicketLimit:    int32(detail.TicketLimit),
+		})
+	}
+
+	return &pb.GetUpcomingEventsResponse{
+		Events: eventList,
+	}, nil
+}
+
+func (s *ClientService) GetVendorProfile(ctx context.Context, req *pb.GetVendorProfileRequest) (*pb.GetVendorProfileResponse, error) {
+	vendorID := req.GetVendorId()
+
+	vendor, err := s.clientRepo.GetVendorDetailsByID(ctx, vendorID)
+	if err != nil {
+		s.log.Error("Failed to fetch vendor profile: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch vendor profile: %v", err)
+	}
+
+	categories, err := s.clientRepo.GetVendorCategories(ctx, vendorID)
+	if err != nil {
+		s.log.Error("Failed to fetch vendor categories: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch vendor categories: %v", err)
+	}
+
+	var categoryList []*pb.Category
+	for _, category := range categories {
+		categoryList = append(categoryList, &pb.Category{
+			CategoryId:   category.ID.String(),
+			CategoryName: category.CategoryName,
+		})
+	}
+
+	vendorDetails := &pb.VendorDetails{
+		VendorId:     vendor.UserID.String(),
+		FirstName:    vendor.FirstName,
+		LastName:     vendor.LastName,
+		Categories:   categoryList,
+		ProfileImage: vendor.ProfileImage,
+	}
+
+	return &pb.GetVendorProfileResponse{
+		VendorDetails: vendorDetails,
 	}, nil
 }
