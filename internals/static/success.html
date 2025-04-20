@@ -1,23 +1,101 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment Status</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Promotion Success</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --primary-bg: #ecfdf5;
+      --primary-text: #064e3b;
+      --accent: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 1rem;
+      background: linear-gradient(to right, #f0fdf4, #ecfdf5);
+      color: var(--primary-text);
+      text-align: center;
+      animation: fadeIn 1s ease-in;
+    }
+
+    h1 {
+      font-size: 3rem;
+      font-weight: 700;
+      margin-bottom: 0.3rem;
+      color: var(--accent);
+    }
+
+    h2 {
+      font-size: 2rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+
+    #emoji {
+      font-size: 3.5rem;
+      margin-bottom: 0.5rem;
+      animation: bounce 1s ease infinite;
+    }
+
+    #message {
+      font-size: 1.2rem;
+      max-width: 600px;
+      background-color: white;
+      padding: 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+    }
+
+    .btn {
+      margin-top: 1.5rem;
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      background-color: var(--accent);
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background-color 0.3s ease;
+    }
+
+    .btn:hover {
+      background-color: #059669;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-10px); }
+    }
+  </style>
 </head>
 <body>
-    <h1>Payment Status</h1>
-    <p id="message">Processing...</p>
-
-    <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const sessionId = urlParams.get("session_id");
-
-        if (sessionId) {
-            document.getElementById("message").innerText = "Payment Successful! You may verify it manually.";
-        } else {
-            document.getElementById("message").innerText = "Payment Failed! Please try again.";
-        }
-    </script>
+  <div id="emoji">🎉</div>
+  <h1>Congratulations!</h1>
+  <h2>You've been promoted to<br>Master of Ceremonies</h2>
+  <p id="message">
+    Dear User, we're thrilled to announce your promotion!<br />
+    You now have the ability to <strong>host</strong> and <strong>manage events</strong> on our platform.<br/>
+    Get ready to lead with energy, confidence, and style ✨
+  </p>
 </body>
 </html>

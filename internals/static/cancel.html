@@ -1,37 +1,41 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment Failed</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payment Unsuccessful</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="flex items-center justify-center min-h-screen bg-red-100">
-    <div class="bg-white p-8 rounded-lg shadow-xl text-center transform scale-90 animate-fadeIn">
-        <div class="text-red-500 text-7xl animate-shake">❌</div>
-        <h1 class="text-3xl font-bold text-red-600 mt-4">Payment Failed</h1>
-        <p class="text-gray-700 mt-2">Oops! Your payment could not be completed.</p>
-        <p class="text-gray-500">Please try again or contact support.</p>
+<body class="flex items-center justify-center min-h-screen bg-red-50">
+  <div class="bg-white p-8 rounded-xl shadow-xl text-center transform scale-90 animate-fadeIn">
+    <div class="text-red-500 text-7xl animate-shake">🛑</div>
+    <h1 class="text-3xl font-bold text-red-600 mt-4">Something Went Wrong</h1>
+    <p class="text-gray-700 mt-2">
+      Your payment didn’t go through for the Master of Ceremonies promotion.
+    </p>
+    <p class="text-gray-500 mt-1">
+      Don’t worry — it happens! You can try again or contact support if needed.
+    </p>
 
-    </div>
+  </div>
 
-    <style>
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.8); }
-            to { opacity: 1; transform: scale(1); }
-        }
-        @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            50% { transform: translateX(5px); }
-            75% { transform: translateX(-5px); }
-        }
-        .animate-fadeIn {
-            animation: fadeIn 0.8s ease-out forwards;
-        }
-        .animate-shake {
-            animation: shake 0.4s ease-in-out infinite;
-        }
-    </style>
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.8); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      50% { transform: translateX(5px); }
+      75% { transform: translateX(-5px); }
+    }
+    .animate-fadeIn {
+      animation: fadeIn 0.8s ease-out forwards;
+    }
+    .animate-shake {
+      animation: shake 0.4s ease-in-out infinite;
+    }
+  </style>
 </body>
 </html>
