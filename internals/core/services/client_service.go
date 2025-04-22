@@ -2,7 +2,8 @@ package services
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
+	"time"
 
 	pb "github.com/AthulKrishna2501/proto-repo/client"
 
@@ -35,7 +36,21 @@ func NewClientService(clientRepo repository.ClientRepository, cfg config.Config,
 }
 
 func (s *ClientService) GetMasterOfCeremony(ctx context.Context, req *pb.MasterOfCeremonyRequest) (*pb.MasterOfCeremonyResponse, error) {
-	Amount := 250000
+
+	Amount := 25000
+
+	s.log.Info("UserID in GetMasterOfCeremony:", req.UserId)
+
+	isMasterOfCeremony, err := s.clientRepo.IsMaterofCeremony(ctx, req.UserId)
+
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to check isMasterOfCeremony %v", err)
+	}
+	if isMasterOfCeremony {
+		return &pb.MasterOfCeremonyResponse{
+			Message: "The user is already designated as Master of Ceremony",
+		}, nil
+	}
 
 	sessionParams := &stripe.CheckoutSessionParams{
 		PaymentMethodTypes: stripe.StringSlice([]string{"card"}),
@@ -51,9 +66,15 @@ func (s *ClientService) GetMasterOfCeremony(ctx context.Context, req *pb.MasterO
 				Quantity: stripe.Int64(1),
 			},
 		},
-		Mode:       stripe.String(string(stripe.CheckoutSessionModePayment)),
-		SuccessURL: stripe.String(s.config.STRIPE_SUCCESS_URL),
-		CancelURL:  stripe.String(s.config.STRIPE_CANCEL_URL),
+		Mode:              stripe.String(string(stripe.CheckoutSessionModePayment)),
+		SuccessURL:        stripe.String(s.config.STRIPE_SUCCESS_URL),
+		CancelURL:         stripe.String(s.config.STRIPE_CANCEL_URL),
+		ClientReferenceID: stripe.String(req.GetUserId()),
+		PaymentIntentData: &stripe.CheckoutSessionPaymentIntentDataParams{
+			Metadata: map[string]string{
+				"user_id": req.GetUserId(),
+			},
+		},
 	}
 
 	stripeSession, err := session.New(sessionParams)
@@ -66,33 +87,105 @@ func (s *ClientService) GetMasterOfCeremony(ctx context.Context, req *pb.MasterO
 	}, nil
 }
 
-func (s *ClientService) VerifyPayment(ctx context.Context, req *pb.VerifyPaymentRequest) (*pb.VerifyPaymentResponse, error) {
-	const amount = 2500
-	stripeSession, err := session.Get(req.SessionId, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve session: %v", err)
-	}
-
-	if stripeSession.PaymentStatus == stripe.CheckoutSessionPaymentStatusPaid {
-		err := s.clientRepo.CreditAdminWallet(amount, s.config.ADMIN_EMAIL)
+func (s *ClientService) HandleStripeEvent(ctx context.Context, req *pb.StripeWebhookRequest) (*pb.StripeWebhookResponse, error) {
+	s.log.Info("Received event type:", req.EventType)
+	Amount := 25000
+	switch req.EventType {
+	case "checkout.session.completed":
+		var event stripe.Event
+		err := json.Unmarshal([]byte(req.Payload), &event)
 		if err != nil {
-			return nil, fmt.Errorf("failed to update createAdminWallet %v", err.Error())
+			return nil, err
 		}
 
-		err = s.clientRepo.UpdateMasterOfCeremonyStatus(req.GetUserId(), true)
-		if err != nil {
-			return nil, fmt.Errorf("failed to updated master of ceremony %v", err.Error())
+		var sessionObj stripe.CheckoutSession
+		if err := json.Unmarshal(event.Data.Raw, &sessionObj); err != nil {
+			return nil, err
 		}
-		return &pb.VerifyPaymentResponse{
-			Success: true,
-			Message: "Payment successful",
-		}, nil
-	} else {
-		return &pb.VerifyPaymentResponse{
-			Success: true,
-			Message: "The payment was not completed or was canceled.",
-		}, nil
+
+		userIdUUID, _ := uuid.Parse(sessionObj.ClientReferenceID)
+
+		newTransaction := &models.Transaction{
+			UserID:          userIdUUID,
+			Purpose:         "Role Upgrade",
+			AmountPaid:      Amount,
+			PaymentMethod:   "stripe",
+			DateOfPayment:   time.Now(),
+			PaymentStatus:   "paid",
+			PaymentIntentID: sessionObj.PaymentIntent.ID,
+		}
+
+		newAdminWalletTransaction := &adminModel.AdminWalletTransaction{
+			Date:   time.Now(),
+			Type:   "Role Upgrade",
+			Amount: float64(Amount),
+			Status: "succeeded",
+		}
+
+		err = s.clientRepo.CreateTransaction(ctx, newTransaction)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create transaction: %v", err)
+		}
+
+		err = s.clientRepo.CreateAdminWalletTransaction(ctx, newAdminWalletTransaction)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create admin wallet transaction")
+		}
+
+		err = s.clientRepo.CreditAmountToAdminWallet(ctx, float64(Amount), s.config.ADMIN_EMAIL)
+
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to credit amount to admin wallet %v", err)
+		}
+
+		err = s.clientRepo.MakeMasterOfCeremony(ctx, sessionObj.ClientReferenceID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to make master of ceremony %v", err)
+		}
+
+	case "payment_method.attached":
+		var paymentMethod stripe.PaymentMethod
+		err := json.Unmarshal([]byte(req.Payload), &paymentMethod)
+		if err != nil {
+			return nil, err
+		}
+
+	case "payment_intent.payment_failed":
+		var event stripe.Event
+		err := json.Unmarshal([]byte(req.Payload), &event)
+		if err != nil {
+			return nil, err
+		}
+
+		var paymentIntent stripe.PaymentIntent
+		if err := json.Unmarshal(event.Data.Raw, &paymentIntent); err != nil {
+			return nil, err
+		}
+
+		userIdStr := paymentIntent.Metadata["user_id"]
+		userIdUUID, _ := uuid.Parse(userIdStr)
+
+		newTransaction := &models.Transaction{
+			UserID:          userIdUUID,
+			Purpose:         "Role Upgrade",
+			AmountPaid:      Amount,
+			PaymentMethod:   "stripe",
+			DateOfPayment:   time.Now(),
+			PaymentStatus:   "failed",
+			PaymentIntentID: paymentIntent.ID,
+		}
+
+		err = s.clientRepo.CreateTransaction(ctx, newTransaction)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to create transaction: %v", err)
+		}
+
+	default:
+		s.log.Info("Unhandled event type: %s\n", req.EventType)
 	}
+	return &pb.StripeWebhookResponse{
+		Status: "success",
+	}, nil
 }
 
 func (s *ClientService) ClientDashboard(ctx context.Context, req *pb.LandingPageRequest) (*pb.LandingPageResponse, error) {

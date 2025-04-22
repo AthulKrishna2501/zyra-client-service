@@ -3,9 +3,8 @@ module github.com/AthulKrishna2501/zyra-client-service
 go 1.24.2
 
 require (
-
-	github.com/AthulKrishna2501/proto-repo v0.0.0-20250416170935-85fba4cb1ae1
-	github.com/AthulKrishna2501/zyra-admin-service v0.0.0-20250415083648-3d8accd2df3d
+	github.com/AthulKrishna2501/proto-repo v0.0.0-20250421121700-d67d8c9fce01
+	github.com/AthulKrishna2501/zyra-admin-service v0.0.0-20250422074921-49265ebca439
 	github.com/AthulKrishna2501/zyra-auth-service v0.0.0-20250413105302-d662797b6e1c
 	github.com/AthulKrishna2501/zyra-vendor-service v0.0.0-20250416181922-17c85cab2a57
 	github.com/cloudinary/cloudinary-go/v2 v2.9.1
@@ -16,7 +15,6 @@ require (
 	github.com/stripe/stripe-go/v76 v76.25.0
 	golang.org/x/crypto v0.36.0
 	google.golang.org/grpc v1.71.1
-
 	google.golang.org/protobuf v1.36.6
 	gorm.io/driver/postgres v1.5.11
 	gorm.io/gorm v1.25.12
@@ -65,7 +63,6 @@ require (
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250115164207-1a7da9e5054f // indirect
-
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 

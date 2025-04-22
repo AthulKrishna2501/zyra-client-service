@@ -9,6 +9,7 @@ import (
 	adminModel "github.com/AthulKrishna2501/zyra-admin-service/internals/core/models"
 	"github.com/AthulKrishna2501/zyra-auth-service/internals/core/models"
 	clientModel "github.com/AthulKrishna2501/zyra-client-service/internals/core/models"
+	"github.com/AthulKrishna2501/zyra-client-service/internals/core/models/resonses"
 	vendorModel "github.com/AthulKrishna2501/zyra-vendor-service/internals/core/models"
 
 	"github.com/google/uuid"
@@ -40,16 +41,20 @@ type ClientRepository interface {
 	UpdatePassword(ctx context.Context, clientID, hashedPassword string) error
 	GetBookingsByClientID(ctx context.Context, clientID string) ([]adminModel.Booking, error)
 	GetUpcomingEvents(ctx context.Context) ([]clientModel.Event, []clientModel.EventDetails, error)
-	GetFeaturedVendors(ctx context.Context) ([]clientModel.FeaturedVendor, error)
+	GetFeaturedVendors(ctx context.Context) ([]resonses.FeaturedVendor, error)
 	IsVendorServiceAvailable(ctx context.Context, vendorID, service string) (bool, error)
 	IsVendorAvailableOnDate(ctx context.Context, vendorID string, date time.Time) (bool, error)
 	CreateBooking(ctx context.Context, booking *adminModel.Booking) error
-	GetVendorsByCategory(ctx context.Context, category string) ([]clientModel.VendorWithDetails, error)
+	GetVendorsByCategory(ctx context.Context, category string) ([]resonses.VendorWithDetails, error)
 	GetServicesByVendorID(ctx context.Context, vendorID uuid.UUID) ([]vendorModel.Service, error)
 	GetEventsHostedByClient(ctx context.Context, clientID string) ([]clientModel.Event, []clientModel.EventDetails, error)
 	GetVendorDetailsByID(ctx context.Context, vendorID string) (*models.UserDetails, error)
 	GetVendorCategories(ctx context.Context, vendorID string) ([]vendorModel.Category, error)
 	GetServicePrice(ctx context.Context, vendorID string, service string) (int, error)
+	CreateTransaction(ctx context.Context, newTransaction *clientModel.Transaction) error
+	MakeMasterOfCeremony(ctx context.Context, userID string) error
+	CreditAmountToAdminWallet(ctx context.Context, amount float64, adminEmail string) error
+	CreateAdminWalletTransaction(ctx context.Context, newAdminWalletTransaction *adminModel.AdminWalletTransaction) error
 }
 
 func NewClientRepository(db *gorm.DB) ClientRepository {
@@ -222,8 +227,8 @@ func (r *ClientStorage) GetUpcomingEvents(ctx context.Context) ([]clientModel.Ev
 	return events, details, nil
 }
 
-func (r *ClientStorage) GetFeaturedVendors(ctx context.Context) ([]clientModel.FeaturedVendor, error) {
-	var vendors []clientModel.FeaturedVendor
+func (r *ClientStorage) GetFeaturedVendors(ctx context.Context) ([]resonses.FeaturedVendor, error) {
+	var vendors []resonses.FeaturedVendor
 	err := r.DB.WithContext(ctx).
 		Table("user_details").
 		Joins("JOIN users u ON u.user_id = user_details.user_id").
@@ -295,8 +300,8 @@ func (r *ClientStorage) GetBookingsByClientID(ctx context.Context, clientID stri
 	return bookings, nil
 }
 
-func (r *ClientStorage) GetVendorsByCategory(ctx context.Context, category string) ([]clientModel.VendorWithDetails, error) {
-	var vendors []clientModel.VendorWithDetails
+func (r *ClientStorage) GetVendorsByCategory(ctx context.Context, category string) ([]resonses.VendorWithDetails, error) {
+	var vendors []resonses.VendorWithDetails
 	err := r.DB.WithContext(ctx).
 		Table("users").
 		Joins("JOIN vendor_categories vc ON vc.vendor_id = users.user_id").
@@ -382,4 +387,40 @@ func (r *ClientStorage) GetServicePrice(ctx context.Context, vendorID string, se
 		return 0, err
 	}
 	return price, nil
+}
+
+func (r *ClientStorage) CreateTransaction(ctx context.Context, newTransaction *clientModel.Transaction) error {
+	return r.DB.WithContext(ctx).Create(newTransaction).Error
+
+}
+
+func (r *ClientStorage) MakeMasterOfCeremony(ctx context.Context, userID string) error {
+	return r.DB.Model(&models.UserDetails{}).Where("user_id = ?", userID).Update("master_of_ceremonies", true).Error
+
+}
+
+func (r *ClientStorage) IsUserMasterOfCeremony(ctx context.Context, userID string) (bool, error) {
+	var status bool
+
+	err := r.DB.WithContext(ctx).Model(&models.UserDetails{}).Select("master_of_ceremony").Where("user_id = ?", userID).Scan(&status).Error
+
+	if err != nil {
+		return false, err
+	}
+
+	return status, nil
+}
+
+func (r *ClientStorage) CreditAmountToAdminWallet(ctx context.Context, amount float64, adminEmail string) error {
+	return r.DB.
+		Model(&adminModel.AdminWallet{}).Where("email = ?", adminEmail).
+		Updates(map[string]interface{}{
+			"balance":        gorm.Expr("balance + ?", amount),
+			"total_deposits": gorm.Expr("total_deposits + ?", amount),
+		}).Error
+
+}
+
+func (r *ClientStorage) CreateAdminWalletTransaction(ctx context.Context, newAdminWalletTransaction *adminModel.AdminWalletTransaction) error {
+	return r.DB.WithContext(ctx).Create(newAdminWalletTransaction).Error
 }
