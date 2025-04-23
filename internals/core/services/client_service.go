@@ -275,8 +275,6 @@ func (s *ClientService) CreateEvent(ctx context.Context, req *pb.CreateEventRequ
 	}
 
 	eventDate := req.GetDate().AsTime()
-	startTime := req.GetEventDetails().GetStartTime().AsTime()
-	endTime := req.GetEventDetails().GetEndTime().AsTime()
 
 	HostedByUUID, _ := uuid.Parse(req.GetHostedBy())
 	EventUUID, _ := uuid.Parse(req.GetEventId())
@@ -305,11 +303,16 @@ func (s *ClientService) CreateEvent(ctx context.Context, req *pb.CreateEventRequ
 
 	s.log.Info("Image Url in cloudinary :", url)
 	s.log.Info("Result in Upload Image resp :", result)
+
+	layout := "15:04"
+	parsedStartTime, _ := time.Parse(layout, req.EventDetails.GetStartTime().String())
+	parsedEndTime, _ := time.Parse(layout, req.EventDetails.GetEndTime().String())
+
 	EventDetails := &models.EventDetails{
 		EventID:        EventUUID,
 		Description:    req.GetEventDetails().GetDescription(),
-		StartTime:      startTime,
-		EndTime:        endTime,
+		StartTime:      parsedStartTime,
+		EndTime:        parsedEndTime,
 		PosterImage:    url,
 		PricePerTicket: int(req.GetEventDetails().GetPricePerTicket()),
 		TicketLimit:    int(req.GetEventDetails().GetTicketLimit()),
@@ -618,8 +621,9 @@ func (s *ClientService) GetHostedEvents(ctx context.Context, req *pb.GetHostedEv
 			},
 			Date:           timestamppb.New(event.Date),
 			Description:    detail.Description,
+			StartTime:      detail.StartTime.Format("15:04"),
+			EndTime:        detail.EndTime.Format("15:04"),
 			PricePerTicket: int32(detail.PricePerTicket),
-			TicketsSold:    int32(detail.TicketsSold),
 			TicketLimit:    int32(detail.TicketLimit),
 		})
 	}
@@ -632,8 +636,8 @@ func (s *ClientService) GetHostedEvents(ctx context.Context, req *pb.GetHostedEv
 func (s *ClientService) GetUpcomingEvents(ctx context.Context, req *pb.GetUpcomingEventsRequest) (*pb.GetUpcomingEventsResponse, error) {
 	events, details, err := s.clientRepo.GetUpcomingEvents(ctx)
 	if err != nil {
-		s.log.Error("Failed to fetch upcoming events: %v", err)
-		return nil, status.Errorf(codes.Internal, "Failed to fetch upcoming events: %v", err)
+		s.log.Error("Failed to fetch upcoming events: %v", err.Error())
+		return nil, status.Errorf(codes.Internal, "Failed to fetch upcoming events: %v", err.Error())
 	}
 
 	detailsMap := make(map[uuid.UUID]models.EventDetails)
@@ -659,13 +663,15 @@ func (s *ClientService) GetUpcomingEvents(ctx context.Context, req *pb.GetUpcomi
 			Description:    detail.Description,
 			PosterImage:    detail.PosterImage,
 			PricePerTicket: int32(detail.PricePerTicket),
-			TicketsSold:    int32(detail.TicketsSold),
 			TicketLimit:    int32(detail.TicketLimit),
+			StartTime:      timestamppb.New(detail.StartTime),
+			EndTime:        timestamppb.New(detail.EndTime),
 		})
 	}
 
 	return &pb.GetUpcomingEventsResponse{
-		Events: eventList,
+		Message: "Event Listings",
+		Events:  eventList,
 	}, nil
 }
 
