@@ -710,3 +710,89 @@ func (s *ClientService) GetVendorProfile(ctx context.Context, req *pb.GetVendorP
 		VendorDetails: vendorDetails,
 	}, nil
 }
+
+func (s *ClientService) AddReviewRatings(ctx context.Context, req *pb.AddReviewRatingsRequest) (*pb.AddReviewRatingsResponse, error) {
+	clientUUID, err := uuid.Parse(req.GetClientId())
+
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to parse clientID %v", err)
+	}
+	vendorUUID, err := uuid.Parse(req.GetVendorId())
+
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to parse vendorID %v", err)
+	}
+
+	newClientReview := &models.Review{
+		ClientID: clientUUID,
+		VendorID: vendorUUID,
+		Rating:   float64(req.GetRating()),
+		Review:   req.GetReview(),
+	}
+
+	err = s.clientRepo.AddReviewRatingsOfClient(ctx, newClientReview)
+
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to add client review ratings %v ", err)
+	}
+
+	return &pb.AddReviewRatingsResponse{
+		Message: "Your review and rating have been submitted successfully",
+	}, nil
+
+}
+
+func (s *ClientService) EditReviewRatings(ctx context.Context, req *pb.EditReviewRatingsRequest) (*pb.EditReviewRatingsResponse, error) {
+	reviewID := req.GetReviewId()
+	rating := float64(req.GetRating())
+	review := req.GetReview()
+
+	err := s.clientRepo.UpdateReviewRatingsOfClient(ctx, reviewID, review, rating)
+
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to update review ratings of client %v", err)
+	}
+
+	return &pb.EditReviewRatingsResponse{
+		Message: "Your review and rating have been updated successfully",
+	}, nil
+
+}
+
+func (s *ClientService) DeleteReviewRatings(ctx context.Context, req *pb.DeleteReviewRequest) (*pb.DeleteReviewResponse, error) {
+	reviewID := req.GetReviewId()
+
+	err := s.clientRepo.DeleteReview(ctx, reviewID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to delete client review: %v", err)
+	}
+
+	return &pb.DeleteReviewResponse{
+		Message: "The review has been successfully removed",
+	}, nil
+
+}
+
+func (s *ClientService) ViewClientReviewRatings(ctx context.Context, req *pb.ViewClientReviewRatingsRequest) (*pb.ViewClientReviewRatingsResponse, error) {
+	clientID := req.GetClientId()
+	reviewDetails, err := s.clientRepo.GetClientReviewRatings(ctx, clientID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to fetch reviews client: %v", err.Error())
+	}
+
+	var pbReviews []*pb.ReviewDetails
+
+	for _, review := range reviewDetails {
+		pbReviews = append(pbReviews, &pb.ReviewDetails{
+			ReviewId:   review.ID,
+			VendorId:   review.UserID,
+			VendorName: review.FirstName,
+			Rating:     float32(review.Rating),
+			Review:     review.Review,
+		})
+	}
+
+	return &pb.ViewClientReviewRatingsResponse{
+		Review: pbReviews,
+	}, nil
+}

@@ -11,13 +11,13 @@ type Transaction struct {
 	ID              uuid.UUID      `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	TransactionID   uuid.UUID      `gorm:"type:uuid;default:gen_random_uuid()"`
 	UserID          uuid.UUID      `gorm:"type:uuid;not null;index"`
+	User            authModel.User `gorm:"foreignKey:UserID;references:UserID"`
 	PaymentIntentID string         `gorm:"type:varchar(255);index"`
 	Purpose         string         `gorm:"not null"`
 	AmountPaid      int            `gorm:"not null"`
 	PaymentMethod   string         `gorm:"type:varchar(50);not null"`
 	PaymentStatus   string         `gorm:"type:varchar(50);not null;index"`
 	DateOfPayment   time.Time      `gorm:"not null;index"`
-	User            authModel.User `gorm:"foreignKey:UserID"`
 }
 
 type Event struct {
@@ -52,4 +52,17 @@ type EventDetails struct {
 	TicketLimit    int       `gorm:"not null"`
 
 	Event *Event `gorm:"foreignKey:EventID;references:EventID"`
+}
+
+type Review struct {
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	ClientID  uuid.UUID `gorm:"type:uuid;not null;index"`
+	VendorID  uuid.UUID `gorm:"type:uuid;not null;index"`
+	Rating    float64       `gorm:"not null;index"`
+	Review    string    `gorm:"type:text"`
+	CreatedAt time.Time `gorm:"default:now()"`
+	UpdatedAt time.Time `gorm:"default:now()"`
+
+	Client authModel.User `gorm:"foreignKey:ClientID;references:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+	Vendor authModel.User `gorm:"foreignKey:VendorID;references:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 }

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"time"
@@ -55,6 +56,10 @@ type ClientRepository interface {
 	MakeMasterOfCeremony(ctx context.Context, userID string) error
 	CreditAmountToAdminWallet(ctx context.Context, amount float64, adminEmail string) error
 	CreateAdminWalletTransaction(ctx context.Context, newAdminWalletTransaction *adminModel.AdminWalletTransaction) error
+	AddReviewRatingsOfClient(ctx context.Context, newReviewRatings *clientModel.Review) error
+	UpdateReviewRatingsOfClient(ctx context.Context, reviewID, review string, rating float64) error
+	GetClientReviewRatings(ctx context.Context, clientID string) ([]*resonses.VendorWithReview, error)
+	DeleteReview(ctx context.Context, reviewID string) error
 }
 
 func NewClientRepository(db *gorm.DB) ClientRepository {
@@ -423,4 +428,43 @@ func (r *ClientStorage) CreditAmountToAdminWallet(ctx context.Context, amount fl
 
 func (r *ClientStorage) CreateAdminWalletTransaction(ctx context.Context, newAdminWalletTransaction *adminModel.AdminWalletTransaction) error {
 	return r.DB.WithContext(ctx).Create(newAdminWalletTransaction).Error
+}
+
+func (r *ClientStorage) AddReviewRatingsOfClient(ctx context.Context, newReviewRatings *clientModel.Review) error {
+	return r.DB.WithContext(ctx).Create(newReviewRatings).Error
+}
+
+func (r *ClientStorage) UpdateReviewRatingsOfClient(ctx context.Context, reviewID, review string, rating float64) error {
+	return r.DB.WithContext(ctx).Where("id = ?", reviewID).Updates(&clientModel.Review{Review: review, Rating: rating}).Error
+
+}
+
+func (r *ClientStorage) GetClientReviewRatings(ctx context.Context, clientID string) ([]*resonses.VendorWithReview, error) {
+	var review []*resonses.VendorWithReview
+
+	err := r.DB.WithContext(ctx).
+		Table("reviews").
+		Select("reviews.id,reviews.rating,reviews.review,user_details.user_id, user_details.first_name").
+		Joins("JOIN user_details ON reviews.vendor_id = user_details.user_id").
+		Where("reviews.client_id = ?", clientID).
+		Find(&review).Error
+
+	if err != nil {
+		return nil, err
+
+	}
+	return review, nil
+}
+
+func (r *ClientStorage) DeleteReview(ctx context.Context, reviewID string) error {
+	result := r.DB.WithContext(ctx).Where("id = ?", reviewID).Delete(&clientModel.Review{})
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.New("no review found with this ID")
+	}
+	return nil
 }
