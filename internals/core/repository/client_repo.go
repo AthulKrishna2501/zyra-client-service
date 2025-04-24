@@ -235,15 +235,26 @@ func (r *ClientStorage) GetUpcomingEvents(ctx context.Context) ([]clientModel.Ev
 
 func (r *ClientStorage) GetFeaturedVendors(ctx context.Context) ([]resonses.FeaturedVendor, error) {
 	var vendors []resonses.FeaturedVendor
+
 	err := r.DB.WithContext(ctx).
 		Table("user_details").
+		Select(`
+			user_details.user_id,
+			user_details.first_name,
+			user_details.last_name,
+			AVG(reviews.rating) as rating,
+			c.category_name
+		`).
 		Joins("JOIN users u ON u.user_id = user_details.user_id").
 		Joins("JOIN vendor_categories vc ON vc.vendor_id = u.user_id").
 		Joins("JOIN categories c ON c.category_id = vc.category_id").
+		Joins("LEFT JOIN reviews ON reviews.vendor_id = u.user_id").
 		Where("u.role = ?", "vendor").
-		Select("user_details.user_id, user_details.first_name, user_details.last_name, c.category_name as category_name").
+		Group("user_details.user_id, user_details.first_name, user_details.last_name, c.category_name").
+		Order("rating DESC").
 		Limit(10).
 		Scan(&vendors).Error
+
 	if err != nil {
 		return nil, err
 	}
