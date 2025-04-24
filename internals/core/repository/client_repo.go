@@ -59,6 +59,7 @@ type ClientRepository interface {
 	AddReviewRatingsOfClient(ctx context.Context, newReviewRatings *clientModel.Review) error
 	UpdateReviewRatingsOfClient(ctx context.Context, reviewID, review string, rating float64) error
 	GetClientReviewRatings(ctx context.Context, clientID string) ([]*resonses.VendorWithReview, error)
+	GetVendorAverageRating(ctx context.Context, vendorID string) (float64, error)
 	DeleteReview(ctx context.Context, reviewID string) error
 }
 
@@ -467,4 +468,18 @@ func (r *ClientStorage) DeleteReview(ctx context.Context, reviewID string) error
 		return errors.New("no review found with this ID")
 	}
 	return nil
+}
+
+func (r *ClientStorage) GetVendorAverageRating(ctx context.Context, vendorID string) (float64, error) {
+	var avg float64
+	err := r.DB.WithContext(ctx).
+		Table("reviews").
+		Select("AVG(rating)").
+		Where("vendor_id = ?", vendorID).
+		Scan(&avg).Error
+
+	if err != nil {
+		return 0, err
+	}
+	return avg, nil
 }

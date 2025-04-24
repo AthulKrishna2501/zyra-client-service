@@ -690,6 +690,22 @@ func (s *ClientService) GetVendorProfile(ctx context.Context, req *pb.GetVendorP
 		return nil, status.Errorf(codes.Internal, "Failed to fetch vendor categories: %v", err)
 	}
 
+	rating, err := s.clientRepo.GetVendorAverageRating(ctx, vendorID)
+	if err != nil {
+		s.log.Error("Failed to fetch vendor rating: %v", err.Error())
+		rating = 0
+		return nil, status.Errorf(codes.Internal, "failed to fetch avg rating %v :", err.Error())
+	}
+
+	vendorUUID, _  := uuid.Parse(vendorID)
+
+	services, err := s.clientRepo.GetServicesByVendorID(ctx, vendorUUID)
+	if err != nil {
+		s.log.Error("Failed to fetch vendor services: %v", err.Error())
+		rating = 0
+		return nil, status.Errorf(codes.Internal, "failed to fetch vendor services %v :", err.Error())
+	}
+
 	var categoryList []*pb.Category
 	for _, category := range categories {
 		categoryList = append(categoryList, &pb.Category{
@@ -698,12 +714,25 @@ func (s *ClientService) GetVendorProfile(ctx context.Context, req *pb.GetVendorP
 		})
 	}
 
+	var serviceList []*pb.Service
+	for _, service := range services {
+		serviceList = append(serviceList, &pb.Service{
+			ServiceId:          service.ID.String(),
+			ServiceTitle:       service.ServiceTitle,
+			ServiceDescription: service.ServiceDescription,
+			ServicePrice:       float64(service.ServicePrice),
+		})
+
+	}
+
 	vendorDetails := &pb.VendorDetails{
 		VendorId:     vendor.UserID.String(),
 		FirstName:    vendor.FirstName,
 		LastName:     vendor.LastName,
 		Categories:   categoryList,
+		Services:     serviceList,
 		ProfileImage: vendor.ProfileImage,
+		Rating:       float32(rating),
 	}
 
 	return &pb.GetVendorProfileResponse{
