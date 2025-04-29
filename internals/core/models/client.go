@@ -58,11 +58,30 @@ type Review struct {
 	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	ClientID  uuid.UUID `gorm:"type:uuid;not null;index"`
 	VendorID  uuid.UUID `gorm:"type:uuid;not null;index"`
-	Rating    float64       `gorm:"not null;index"`
+	Rating    float64   `gorm:"not null;index"`
 	Review    string    `gorm:"type:text"`
 	CreatedAt time.Time `gorm:"default:now()"`
 	UpdatedAt time.Time `gorm:"default:now()"`
 
 	Client authModel.User `gorm:"foreignKey:ClientID;references:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
 	Vendor authModel.User `gorm:"foreignKey:VendorID;references:UserID;constraint:OnUpdate:CASCADE,OnDelete:CASCADE;"`
+}
+
+type Ticket struct {
+	ID        uuid.UUID `gorm:"type:uuid;primary_key"`
+	TicketID  string    `gorm:"type:varchar(255);unique;not null"`
+	ClientID  uuid.UUID `gorm:"type:uuid;not null"`
+	EventID   uuid.UUID `gorm:"type:uuid;not null"`
+	CreatedAt time.Time `gorm:"default:current_timestamp"`
+	UpdatedAt time.Time `gorm:"default:current_timestamp"`
+}
+
+type QR struct {
+	ID          uuid.UUID  `gorm:"type:uuid;primary_key"`
+	UserID      uuid.UUID  `gorm:"type:uuid;not null"`
+	EventID     uuid.UUID  `gorm:"type:uuid;not null"`
+	Code        string     `gorm:"type:text;not null;unique"`
+	GeneratedAt time.Time  `gorm:"default:current_timestamp"`
+	IsScanned   bool       `gorm:"default:false"`
+	ScannedAt   *time.Time `gorm:"type:timestamp"`
 }

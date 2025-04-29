@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	pb "github.com/AthulKrishna2501/proto-repo/client"
@@ -15,6 +16,7 @@ import (
 	"github.com/AthulKrishna2501/zyra-client-service/internals/core/models"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/core/repository"
 	"github.com/AthulKrishna2501/zyra-client-service/internals/logger"
+	"github.com/AthulKrishna2501/zyra-client-service/internals/utils"
 	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v76"
 	"github.com/stripe/stripe-go/v76/checkout/session"
@@ -35,61 +37,201 @@ func NewClientService(clientRepo repository.ClientRepository, cfg config.Config,
 	return &ClientService{clientRepo: clientRepo, config: cfg, log: logger}
 }
 
-func (s *ClientService) GetMasterOfCeremony(ctx context.Context, req *pb.MasterOfCeremonyRequest) (*pb.MasterOfCeremonyResponse, error) {
+func (s *ClientService) CreateBookingSession(ctx context.Context, req *pb.GenericBookingRequest) (*pb.GenericBookingResponse, error) {
 
-	Amount := 25000
+	s.log.Info("UserID in GetService:", req.UserId)
 
-	s.log.Info("UserID in GetMasterOfCeremony:", req.UserId)
+	if req.ServiceType == "master_of_ceremony" {
+		Amount := 2500 * 100
 
-	isMasterOfCeremony, err := s.clientRepo.IsMaterofCeremony(ctx, req.UserId)
+		isMasterOfCeremony, err := s.clientRepo.IsMaterofCeremony(ctx, req.UserId)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to check isMasterOfCeremony %v", err)
+		}
+		if isMasterOfCeremony {
+			return &pb.GenericBookingResponse{
+				Message: "The user is already designated as Master of Ceremony",
+			}, nil
+		}
+		sessionParams := &stripe.CheckoutSessionParams{
+			PaymentMethodTypes: stripe.StringSlice([]string{"card"}),
+			LineItems: []*stripe.CheckoutSessionLineItemParams{
+				{
+					PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
+						Currency: stripe.String("inr"),
+						ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
+							Name: stripe.String("Master Of Ceremony"),
+						},
+						UnitAmount: stripe.Int64(int64(Amount)),
+					},
+					Quantity: stripe.Int64(1),
+				},
+			},
+			Mode:              stripe.String(string(stripe.CheckoutSessionModePayment)),
+			SuccessURL:        stripe.String(fmt.Sprintf("%s&purpose=%s", s.config.STRIPE_SUCCESS_URL, "master_of_ceremony")),
+			CancelURL:         stripe.String(s.config.STRIPE_CANCEL_URL),
+			ClientReferenceID: stripe.String(req.GetUserId()),
+			PaymentIntentData: &stripe.CheckoutSessionPaymentIntentDataParams{
+				Metadata: map[string]string{
+					"user_id": req.GetUserId(),
+				},
+			},
+		}
 
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to check isMasterOfCeremony %v", err)
+		stripeSession, err := session.New(sessionParams)
+		if err != nil {
+			return nil, err
+		}
+
+		return &pb.GenericBookingResponse{
+			Url: stripeSession.URL,
+		}, nil
+
 	}
-	if isMasterOfCeremony {
-		return &pb.MasterOfCeremonyResponse{
-			Message: "The user is already designated as Master of Ceremony",
+
+	if req.ServiceType == "vendor_booking" {
+		if req.Metadata["vendor_id"] == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "vendor_id is required for vendor booking")
+		}
+
+		if req.Metadata["service_id"] == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "service_id is required for vendor booking")
+		}
+
+		count, err := s.clientRepo.GetBookingCount(ctx, req.GetUserId())
+
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to check booking count :%v", err)
+		}
+
+		const MaxBookingsPerDay = 3
+
+		if count >= MaxBookingsPerDay {
+			return nil, status.Errorf(codes.PermissionDenied, "Booking limit reached for today")
+		}
+
+		vendorExists, err := s.clientRepo.VendorExists(ctx, req.Metadata["vendor_id"])
+
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to check vendor exists :%v", err)
+		}
+
+		if !vendorExists {
+			return nil, status.Errorf(codes.NotFound, "vendor with ID %s does not exists ", req.Metadata["vendor_id"])
+		}
+
+		serviceExists, err := s.clientRepo.ServiceExists(ctx, req.Metadata["vendor_id"], req.Metadata["service_id"])
+
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to check service exists :%v", err)
+		}
+
+		if !serviceExists {
+			return nil, status.Errorf(codes.NotFound, "service with ID %s does not exists", req.Metadata["service_id"])
+		}
+
+		ServicePrice, err := s.clientRepo.GetServiceAmount(ctx, req.Metadata["service_id"])
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get service price: %v", err)
+		}
+
+		totalPrice := ServicePrice * 100
+
+		sessionParams := &stripe.CheckoutSessionParams{
+			PaymentMethodTypes: stripe.StringSlice([]string{"card"}),
+			LineItems: []*stripe.CheckoutSessionLineItemParams{
+				{
+					PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
+						Currency: stripe.String("inr"),
+						ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
+							Name: stripe.String("Service Booking"),
+						},
+						UnitAmount: stripe.Int64(int64(totalPrice)),
+					},
+					Quantity: stripe.Int64(1),
+				},
+			},
+			Mode:              stripe.String(string(stripe.CheckoutSessionModePayment)),
+			SuccessURL:        stripe.String(fmt.Sprintf("%s&purpose=%s", s.config.STRIPE_SUCCESS_URL, "vendor_booking")),
+			CancelURL:         stripe.String(s.config.STRIPE_CANCEL_URL),
+			ClientReferenceID: stripe.String(req.GetUserId()),
+			Metadata: map[string]string{
+				"user_id":    req.GetUserId(),
+				"vendor_id":  req.Metadata["vendor_id"],
+				"service_id": req.Metadata["service_id"],
+			},
+		}
+		stripeSession, err := session.New(sessionParams)
+		if err != nil {
+			return nil, err
+		}
+
+		return &pb.GenericBookingResponse{
+			Url: stripeSession.URL,
 		}, nil
 	}
 
-	sessionParams := &stripe.CheckoutSessionParams{
-		PaymentMethodTypes: stripe.StringSlice([]string{"card"}),
-		LineItems: []*stripe.CheckoutSessionLineItemParams{
-			{
-				PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
-					Currency: stripe.String("inr"),
-					ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
-						Name: stripe.String("Master of Ceremony Service"),
+	if req.ServiceType == "event_booking" {
+		if req.Metadata["event_id"] == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "event is required for event booking")
+		}
+
+		bookingExists, err := s.clientRepo.EventExists(ctx, req.Metadata["event_id"])
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to check event booking exists: %v", err)
+		}
+		if !bookingExists {
+			return nil, status.Errorf(codes.NotFound, "event booking with ID %s does not exist", req.Metadata["booking_id"])
+		}
+
+		bookingAmount, err := s.clientRepo.GetEventAmount(ctx, req.Metadata["event_id"])
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get event booking amount: %v", err)
+		}
+		totalAmount := bookingAmount * 100
+
+		sessionParams := &stripe.CheckoutSessionParams{
+			PaymentMethodTypes: stripe.StringSlice([]string{"card"}),
+			LineItems: []*stripe.CheckoutSessionLineItemParams{
+				{
+					PriceData: &stripe.CheckoutSessionLineItemPriceDataParams{
+						Currency: stripe.String("inr"),
+						ProductData: &stripe.CheckoutSessionLineItemPriceDataProductDataParams{
+							Name: stripe.String("Event Booking"),
+						},
+						UnitAmount: stripe.Int64(int64(totalAmount)),
 					},
-					UnitAmount: stripe.Int64(int64(Amount)),
+					Quantity: stripe.Int64(1),
 				},
-				Quantity: stripe.Int64(1),
 			},
-		},
-		Mode:              stripe.String(string(stripe.CheckoutSessionModePayment)),
-		SuccessURL:        stripe.String(s.config.STRIPE_SUCCESS_URL),
-		CancelURL:         stripe.String(s.config.STRIPE_CANCEL_URL),
-		ClientReferenceID: stripe.String(req.GetUserId()),
-		PaymentIntentData: &stripe.CheckoutSessionPaymentIntentDataParams{
+			Mode:              stripe.String(string(stripe.CheckoutSessionModePayment)),
+			SuccessURL:        stripe.String(fmt.Sprintf("%s&purpose=%s&event_id=%s", s.config.STRIPE_SUCCESS_URL, "event_booking", req.Metadata["event_id"])),
+			CancelURL:         stripe.String(s.config.STRIPE_CANCEL_URL),
+			ClientReferenceID: stripe.String(req.GetUserId()),
 			Metadata: map[string]string{
-				"user_id": req.GetUserId(),
+				"user_id":  req.GetUserId(),
+				"event_id": req.Metadata["event_id"],
 			},
-		},
+		}
+
+		stripeSession, err := session.New(sessionParams)
+		if err != nil {
+			return nil, err
+		}
+
+		return &pb.GenericBookingResponse{
+			Url: stripeSession.URL,
+		}, nil
 	}
 
-	stripeSession, err := session.New(sessionParams)
-	if err != nil {
-		return nil, err
-	}
+	return nil, nil
 
-	return &pb.MasterOfCeremonyResponse{
-		Url: stripeSession.URL,
-	}, nil
 }
 
 func (s *ClientService) HandleStripeEvent(ctx context.Context, req *pb.StripeWebhookRequest) (*pb.StripeWebhookResponse, error) {
 	s.log.Info("Received event type:", req.EventType)
-	Amount := 25000
+	defaultAmount := 2500
+
 	switch req.EventType {
 	case "checkout.session.completed":
 		var event stripe.Event
@@ -105,42 +247,189 @@ func (s *ClientService) HandleStripeEvent(ctx context.Context, req *pb.StripeWeb
 
 		userIdUUID, _ := uuid.Parse(sessionObj.ClientReferenceID)
 
-		newTransaction := &models.Transaction{
-			UserID:          userIdUUID,
-			Purpose:         "Role Upgrade",
-			AmountPaid:      Amount,
-			PaymentMethod:   "stripe",
-			DateOfPayment:   time.Now(),
-			PaymentStatus:   "paid",
-			PaymentIntentID: sessionObj.PaymentIntent.ID,
+		purpose := "Role Upgrade"
+		if sessionObj.PaymentIntent == nil {
+			return nil, status.Errorf(codes.Internal, "PaymentIntent is nil in session")
 		}
 
-		newAdminWalletTransaction := &adminModel.AdminWalletTransaction{
-			Date:   time.Now(),
-			Type:   "Role Upgrade",
-			Amount: float64(Amount),
-			Status: "succeeded",
+		serviceID := sessionObj.Metadata["service_id"]
+		vendorID := sessionObj.Metadata["vendor_id"]
+		eventID := sessionObj.Metadata["event_id"]
+
+		s.log.Info("ServiceID and Vendor ID in HandleStripeEvent :", serviceID, vendorID)
+
+		vendorUUID, _ := uuid.Parse(vendorID)
+		eventUUID, _ := uuid.Parse(eventID)
+
+		if serviceID != "" {
+			purpose = "Vendor Booking"
 		}
 
-		err = s.clientRepo.CreateTransaction(ctx, newTransaction)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to create transaction: %v", err)
+		if eventID != "" {
+			purpose = "Event Booking"
 		}
 
-		err = s.clientRepo.CreateAdminWalletTransaction(ctx, newAdminWalletTransaction)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to create admin wallet transaction")
+		Amount := sessionObj.AmountTotal / 100
+		if Amount == 0 {
+			Amount = int64(defaultAmount)
 		}
 
-		err = s.clientRepo.CreditAmountToAdminWallet(ctx, float64(Amount), s.config.ADMIN_EMAIL)
+		switch purpose {
+		case "Role Upgrade":
+			newTransaction := &models.Transaction{
+				UserID:          userIdUUID,
+				Purpose:         purpose,
+				AmountPaid:      int(Amount),
+				PaymentMethod:   "stripe",
+				DateOfPayment:   time.Now(),
+				PaymentStatus:   "paid",
+				PaymentIntentID: sessionObj.PaymentIntent.ID,
+			}
 
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to credit amount to admin wallet %v", err)
-		}
+			newAdminWalletTransaction := &adminModel.AdminWalletTransaction{
+				Date:   time.Now(),
+				Type:   purpose,
+				Amount: float64(Amount),
+				Status: "succeeded",
+			}
+			err = s.clientRepo.CreateTransaction(ctx, newTransaction)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to create transaction: %v", err)
+			}
 
-		err = s.clientRepo.MakeMasterOfCeremony(ctx, sessionObj.ClientReferenceID)
-		if err != nil {
-			return nil, status.Errorf(codes.Internal, "failed to make master of ceremony %v", err)
+			err = s.clientRepo.CreateAdminWalletTransaction(ctx, newAdminWalletTransaction)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to create admin wallet transaction")
+			}
+
+			err = s.clientRepo.CreditAmountToAdminWallet(ctx, float64(Amount), s.config.ADMIN_EMAIL)
+
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to credit amount to admin wallet %v", err)
+			}
+
+			err = s.clientRepo.MakeMasterOfCeremony(ctx, sessionObj.ClientReferenceID)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to make master of ceremony %v", err)
+
+			}
+
+		case "Vendor Booking":
+			newTransaction := &models.Transaction{
+				UserID:          userIdUUID,
+				Purpose:         purpose,
+				AmountPaid:      int(Amount),
+				PaymentMethod:   "stripe",
+				DateOfPayment:   time.Now(),
+				PaymentStatus:   "paid",
+				PaymentIntentID: sessionObj.PaymentIntent.ID,
+			}
+
+			newAdminWalletTransaction := &adminModel.AdminWalletTransaction{
+				Date:   time.Now(),
+				Type:   purpose,
+				Amount: float64(Amount),
+				Status: "succeeded",
+			}
+
+			serviceInfo, err := s.clientRepo.GetServiceInfo(ctx, serviceID)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to fetch service name %v:", err)
+
+			}
+
+			newBooking := &adminModel.Booking{
+				ClientID:  userIdUUID,
+				VendorID:  vendorUUID,
+				Service:   serviceInfo.ServiceTitle,
+				Date:      serviceInfo.AvailableDate,
+				Status:    "pending",
+				Price:     int(Amount),
+				CreatedAt: time.Now(),
+			}
+
+			err = s.clientRepo.CreateBooking(ctx, newBooking)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to book vendor %v:", err)
+			}
+
+			err = s.clientRepo.CreateTransaction(ctx, newTransaction)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to create transaction: %v", err)
+			}
+
+			err = s.clientRepo.CreditAmountToAdminWallet(ctx, float64(Amount), s.config.ADMIN_EMAIL)
+
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to credit amount to admin wallet %v", err)
+			}
+
+			err = s.clientRepo.CreateAdminWalletTransaction(ctx, newAdminWalletTransaction)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to create admin wallet transaction")
+			}
+
+		case "Event Booking":
+			newTransaction := &models.Transaction{
+				UserID:          userIdUUID,
+				Purpose:         purpose,
+				AmountPaid:      int(Amount),
+				PaymentMethod:   "stripe",
+				DateOfPayment:   time.Now(),
+				PaymentStatus:   "paid",
+				PaymentIntentID: sessionObj.PaymentIntent.ID,
+			}
+			err = s.clientRepo.CreateTransaction(ctx, newTransaction)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to create event booking transaction: %v", err)
+			}
+
+			ticketID := uuid.New()
+			qrID := uuid.New()
+
+			newTicket := &models.Ticket{
+				ID:        ticketID,
+				TicketID:  ticketID.String(),
+				ClientID:  userIdUUID,
+				EventID:   eventUUID,
+				CreatedAt: time.Now(),
+				UpdatedAt: time.Now(),
+			}
+			err = s.clientRepo.CreateTicket(ctx, newTicket)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to create ticket: %v", err)
+			}
+
+			qrCode := utils.GenerateQRCode(ticketID.String())
+			newQR := &models.QR{
+				ID:          qrID,
+				UserID:      userIdUUID,
+				EventID:     eventUUID,
+				Code:        qrCode,
+				GeneratedAt: time.Now(),
+				IsScanned:   false,
+			}
+			err = s.clientRepo.CreateQRCode(ctx, newQR)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to create QR code: %v", err)
+			}
+
+			newAdminWalletTransaction := &adminModel.AdminWalletTransaction{
+				Date:   time.Now(),
+				Type:   purpose,
+				Amount: float64(Amount),
+				Status: "succeeded",
+			}
+			err = s.clientRepo.CreateAdminWalletTransaction(ctx, newAdminWalletTransaction)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to create admin wallet transaction: %v", err)
+			}
+
+			err = s.clientRepo.CreditAmountToAdminWallet(ctx, float64(Amount), s.config.ADMIN_EMAIL)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "failed to credit amount to admin wallet: %v", err)
+			}
+
 		}
 
 	case "payment_method.attached":
@@ -168,7 +457,7 @@ func (s *ClientService) HandleStripeEvent(ctx context.Context, req *pb.StripeWeb
 		newTransaction := &models.Transaction{
 			UserID:          userIdUUID,
 			Purpose:         "Role Upgrade",
-			AmountPaid:      Amount,
+			AmountPaid:      defaultAmount,
 			PaymentMethod:   "stripe",
 			DateOfPayment:   time.Now(),
 			PaymentStatus:   "failed",
@@ -304,15 +593,11 @@ func (s *ClientService) CreateEvent(ctx context.Context, req *pb.CreateEventRequ
 	s.log.Info("Image Url in cloudinary :", url)
 	s.log.Info("Result in Upload Image resp :", result)
 
-	layout := "15:04"
-	parsedStartTime, _ := time.Parse(layout, req.EventDetails.GetStartTime().String())
-	parsedEndTime, _ := time.Parse(layout, req.EventDetails.GetEndTime().String())
-
 	EventDetails := &models.EventDetails{
 		EventID:        EventUUID,
 		Description:    req.GetEventDetails().GetDescription(),
-		StartTime:      parsedStartTime,
-		EndTime:        parsedEndTime,
+		StartTime:      req.GetEventDetails().GetStartTime().AsTime(),
+		EndTime:        req.GetEventDetails().GetEndTime().AsTime(),
 		PosterImage:    url,
 		PricePerTicket: int(req.GetEventDetails().GetPricePerTicket()),
 		TicketLimit:    int(req.GetEventDetails().GetTicketLimit()),
@@ -484,12 +769,15 @@ func (s *ClientService) GetBookings(ctx context.Context, req *pb.GetBookingsRequ
 			BookingId: booking.BookingID.String(),
 			Vendor: &pb.Vendor{
 				VendorId: booking.VendorID.String(),
-				Name:     booking.Vendor.FirstName + "" + booking.Vendor.LastName,
+				Name:     booking.FirstName + " " + booking.LastName,
 			},
-			Service: booking.Service,
-			Date:    timestamppb.New(booking.Date),
-			Price:   int32(booking.Price),
-			Status:  booking.Status,
+			Service:             booking.Service,
+			Date:                timestamppb.New(booking.Date),
+			Price:               int32(booking.Price),
+			Status:              booking.Status,
+			Duration:            booking.ServiceDuration,
+			AdditionalHourPrice: booking.AdditionalHourPrice,
+			PaymentId:           booking.PaymentID,
 		})
 	}
 
@@ -498,55 +786,55 @@ func (s *ClientService) GetBookings(ctx context.Context, req *pb.GetBookingsRequ
 	}, nil
 }
 
-func (s *ClientService) BookVendor(ctx context.Context, req *pb.BookVendorRequest) (*pb.BookVendorResponse, error) {
-	clientID := req.GetClientId()
-	vendorID := req.GetVendorId()
-	service := req.GetService()
-	date := req.GetDate().AsTime()
+// func (s *ClientService) BookVendor(ctx context.Context, req *pb.BookVendorRequest) (*pb.BookVendorResponse, error) {
+// 	clientID := req.GetClientId()
+// 	vendorID := req.GetVendorId()
+// 	serviceID := req.GetServiceId()
+// 	date := req.GetDate().AsTime()
 
-	isServiceAvailable, err := s.clientRepo.IsVendorServiceAvailable(ctx, vendorID, service)
-	if err != nil {
-		s.log.Error("Failed to validate vendor service: %v", err)
-		return nil, status.Errorf(codes.Internal, "Failed to validate vendor service: %v", err)
-	}
-	if !isServiceAvailable {
-		return nil, status.Errorf(codes.InvalidArgument, "The vendor does not provide the requested service")
-	}
+// 	isServiceAvailable, err := s.clientRepo.IsVendorServiceAvailable(ctx, vendorID, service)
+// 	if err != nil {
+// 		s.log.Error("Failed to validate vendor service: %v", err)
+// 		return nil, status.Errorf(codes.Internal, "Failed to validate vendor service: %v", err)
+// 	}
+// 	if !isServiceAvailable {
+// 		return nil, status.Errorf(codes.InvalidArgument, "The vendor does not provide the requested service")
+// 	}
 
-	isDateAvailable, err := s.clientRepo.IsVendorAvailableOnDate(ctx, vendorID, date)
-	if err != nil {
-		s.log.Error("Failed to validate vendor availability: %v", err)
-		return nil, status.Errorf(codes.Internal, "Failed to validate vendor availability: %v", err)
-	}
-	if !isDateAvailable {
-		return nil, status.Errorf(codes.InvalidArgument, "The vendor is not available on the requested date")
-	}
+// 	isDateAvailable, err := s.clientRepo.IsVendorAvailableOnDate(ctx, vendorID, date)
+// 	if err != nil {
+// 		s.log.Error("Failed to validate vendor availability: %v", err)
+// 		return nil, status.Errorf(codes.Internal, "Failed to validate vendor availability: %v", err)
+// 	}
+// 	if !isDateAvailable {
+// 		return nil, status.Errorf(codes.InvalidArgument, "The vendor is not available on the requested date")
+// 	}
 
-	price, err := s.clientRepo.GetServicePrice(ctx, vendorID, service)
-	if err != nil {
-		s.log.Error("Failed to fetch service price: %v", err)
-		return nil, status.Errorf(codes.Internal, "Failed to fetch service price: %v", err)
-	}
+// 	price, err := s.clientRepo.GetServicePrice(ctx, vendorID, serviceID)
+// 	if err != nil {
+// 		s.log.Error("Failed to fetch service price: %v", err)
+// 		return nil, status.Errorf(codes.Internal, "Failed to fetch service price: %v", err)
+// 	}
 
-	booking := &adminModel.Booking{
-		ClientID: uuid.MustParse(clientID),
-		VendorID: uuid.MustParse(vendorID),
-		Service:  service,
-		Date:     date,
-		Price:    price,
-		Status:   "pending",
-	}
+// 	booking := &adminModel.Booking{
+// 		ClientID: uuid.MustParse(clientID),
+// 		VendorID: uuid.MustParse(vendorID),
+// 		Service:  service,
+// 		Date:     date,
+// 		Price:    price,
+// 		Status:   "pending",
+// 	}
 
-	err = s.clientRepo.CreateBooking(ctx, booking)
-	if err != nil {
-		s.log.Error("Failed to create booking: %v", err)
-		return nil, status.Errorf(codes.Internal, "Failed to create booking: %v", err)
-	}
+// 	err = s.clientRepo.CreateBooking(ctx, booking)
+// 	if err != nil {
+// 		s.log.Error("Failed to create booking: %v", err)
+// 		return nil, status.Errorf(codes.Internal, "Failed to create booking: %v", err)
+// 	}
 
-	return &pb.BookVendorResponse{
-		Message: "Booking created successfully",
-	}, nil
-}
+// 	return &pb.BookVendorResponse{
+// 		Message: "Booking created successfully",
+// 	}, nil
+// }
 
 func (s *ClientService) GetVendorsByCategory(ctx context.Context, req *pb.GetVendorsByCategoryRequest) (*pb.GetVendorsByCategoryResponse, error) {
 	category := req.GetCategory()
@@ -697,7 +985,7 @@ func (s *ClientService) GetVendorProfile(ctx context.Context, req *pb.GetVendorP
 		return nil, status.Errorf(codes.Internal, "failed to fetch avg rating %v :", err.Error())
 	}
 
-	vendorUUID, _  := uuid.Parse(vendorID)
+	vendorUUID, _ := uuid.Parse(vendorID)
 
 	services, err := s.clientRepo.GetServicesByVendorID(ctx, vendorUUID)
 	if err != nil {
@@ -824,4 +1112,151 @@ func (s *ClientService) ViewClientReviewRatings(ctx context.Context, req *pb.Vie
 	return &pb.ViewClientReviewRatingsResponse{
 		Review: pbReviews,
 	}, nil
+}
+
+func (s *ClientService) GetWallet(ctx context.Context, req *pb.GetWalletRequest) (*pb.GetWalletResponse, error) {
+	clientID := req.GetClientId()
+	wallet, err := s.clientRepo.GetClientWallet(ctx, clientID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to fetch client wallet: %v", err)
+	}
+
+	return &pb.GetWalletResponse{
+		Balance:          float32(wallet.WalletBalance),
+		TotalDeposits:    float32(wallet.TotalDeposits),
+		TotalWithdrawals: float32(wallet.TotalWithdrawals),
+	}, nil
+
+}
+
+func (s *ClientService) GetClientTransactions(ctx context.Context, req *pb.ViewClientTransactionsRequest) (*pb.ViewClientTransactionResponse, error) {
+	clientID := req.GetClientId()
+	walletTransactions, err := s.clientRepo.GetClientTransactions(ctx, clientID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to retrieve admin wallet transactions: %v", err.Error())
+	}
+
+	var protoTransactions []*pb.ClientTransaction
+	for _, txn := range walletTransactions {
+		protoTransactions = append(protoTransactions, &pb.ClientTransaction{
+			TransactionId: txn.TransactionID.String(),
+			Date:          txn.DateOfPayment.String(),
+			Type:          txn.Purpose,
+			Amount:        float32(txn.AmountPaid),
+			Status:        txn.PaymentStatus,
+		})
+	}
+
+	return &pb.ViewClientTransactionResponse{
+		Transactions: protoTransactions,
+	}, nil
+}
+
+func (s *ClientService) CompleteServiceBooking(ctx context.Context, req *pb.CompleteServiceBookingRequest) (*pb.CompleteServiceBookingResponse, error) {
+	if req.BookingId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "booking_id is required")
+	}
+	if req.ClientId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "client_id is required")
+	}
+	if req.Status == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "status is required")
+	}
+
+	booking, err := s.clientRepo.GetBookingById(ctx, req.BookingId)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "booking not found: %v", err)
+	}
+
+	clientUUID, err := uuid.Parse(req.ClientId)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid client_id format")
+	}
+	if booking.ClientID != clientUUID {
+		return nil, status.Errorf(codes.PermissionDenied, "booking does not belong to the client")
+	}
+
+	err = s.clientRepo.UpdateClientApprovalStatus(ctx, req.BookingId, true)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to update client approval status: %v", err)
+	}
+
+	if booking.IsVendorApproved && !booking.IsClientApproved {
+		booking.IsClientApproved = true
+	}
+
+	if booking.IsVendorApproved && booking.IsClientApproved {
+		err = s.clientRepo.ReleasePaymentToVendor(ctx, booking.VendorID.String(), float64(booking.Price))
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to release payment to vendor: %v", err)
+		}
+
+		err = s.clientRepo.MarkBookingAsConfirmedAndReleased(ctx, req.BookingId)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to mark booking as confirmed: %v", err)
+		}
+	}
+
+	return &pb.CompleteServiceBookingResponse{
+		Message: "Booking completed successfully",
+	}, nil
+}
+
+func (s *ClientService) CancelVendorBooking(ctx context.Context, req *pb.CancelVendorBookingRequest) (*pb.CancelVendorBookingResponse, error) {
+
+	clientUUID, err := uuid.Parse(req.GetClientId())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to parse clien_id")
+	}
+	booking, err := s.clientRepo.GetBookingById(ctx, req.BookingId)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "booking not found: %v", err)
+	}
+
+	if booking.Status == "rejected" || booking.Status == "completed" {
+		return &pb.CancelVendorBookingResponse{
+			Message: "Booking cannot be canceled as it is already completed or rejected.",
+		}, nil
+	}
+
+	newTransaction := &models.Transaction{
+		UserID:        clientUUID,
+		Purpose:       "Cancel Vendor Booking",
+		AmountPaid:    booking.Price,
+		PaymentMethod: "wallet",
+		DateOfPayment: time.Now(),
+		PaymentStatus: "refunded",
+	}
+
+	newAdminWalletTransaction := &adminModel.AdminWalletTransaction{
+		Date:   time.Now(),
+		Type:   "Cancel Vendor Booking",
+		Amount: float64(booking.Price),
+		Status: "withdrawn",
+	}
+
+	err = s.clientRepo.CreateTransaction(ctx, newTransaction)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to create transaction: %v", err)
+	}
+
+	err = s.clientRepo.CreateAdminWalletTransaction(ctx, newAdminWalletTransaction)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to create admin wallet transaction")
+	}
+
+	err = s.clientRepo.RefundAmount(ctx, s.config.ADMIN_EMAIL, clientUUID.String(), booking.Price)
+
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to refund amount %v", err)
+	}
+
+	err = s.clientRepo.UpdateBookingStatus(ctx, booking.BookingID.String(), "cancelled")
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to update booking status: %v", err)
+	}
+
+	return &pb.CancelVendorBookingResponse{
+			Message: "Vendor booking cancelled "},
+		nil
 }

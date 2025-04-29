@@ -41,7 +41,7 @@ func main() {
 
 	router := gin.Default()
 	log.Info("HTTP Server started on port 3005")
-	router.Static("/", "../internals/static")
+	router.Static("/", "./internals/static")
 	router.Run(":3005")
 
 }

@@ -3,102 +3,349 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Promotion Success</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
+  <title>Payment Success</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Work+Sans:wght@500;600;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
   <style>
     :root {
-      --primary-bg: #0f172a;
-      --card-bg: rgba(255, 255, 255, 0.05);
-      --primary-text: #f1f5f9;
-      --accent: #22c55e;
+      --primary-bg: #121826;
+      --secondary-bg: #1a2332;
+      --card-bg: #1e293b;
+      --primary-text: #f8fafc;
+      --secondary-text: #94a3b8;
+      --accent-success: #0ea5e9;
+      --accent-promotion: #818cf8;
+      --accent-error: #f43f5e;
+      --border-color: #334155;
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.2), 0 10px 15px rgba(0, 0, 0, 0.3);
     }
 
     * {
       box-sizing: border-box;
+      margin: 0;
+      padding: 0;
     }
 
     body {
       font-family: 'Inter', sans-serif;
+      background-color: var(--primary-bg);
+      color: var(--primary-text);
+      min-height: 100vh;
       display: flex;
       flex-direction: column;
-      justify-content: center;
       align-items: center;
-      min-height: 100vh;
-      margin: 0;
-      padding: 1rem;
-      background: linear-gradient(to right, #0f172a, #1e293b);
-      color: var(--primary-text);
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 650px;
+      background-color: var(--card-bg);
+      border-radius: 12px;
+      box-shadow: var(--shadow-md);
+      overflow: hidden;
+      border: 1px solid var(--border-color);
+    }
+
+    .card-header {
+      padding: 2rem;
       text-align: center;
-      animation: fadeIn 1s ease-in;
+      position: relative;
+      background-color: var(--secondary-bg);
+    }
+
+    .status-indicator {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1.5rem;
+    }
+
+    .status-icon {
+      font-size: 2.25rem;
     }
 
     h1 {
-      font-size: 3rem;
-      font-weight: 700;
-      margin-bottom: 0.3rem;
-      color: var(--accent);
+      font-family: 'Work Sans', sans-serif;
+      font-size: 1.75rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: var(--primary-text);
     }
 
     h2 {
-      font-size: 2rem;
-      font-weight: 600;
-      margin-bottom: 1rem;
-    }
-
-    #emoji {
-      font-size: 3.5rem;
+      font-family: 'Work Sans', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 400;
+      color: var(--secondary-text);
       margin-bottom: 0.5rem;
-      animation: bounce 1s ease infinite;
     }
 
-    #message {
-      font-size: 1.2rem;
-      max-width: 600px;
-      background-color: var(--card-bg);
-      padding: 1.5rem;
-      border-radius: 12px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-      backdrop-filter: blur(6px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
+    .card-body {
+      padding: 1.75rem 2rem;
+      text-align: left;
+      border-top: 1px solid var(--border-color);
+    }
+
+    .message {
+      font-size: 1rem;
+      line-height: 1.7;
+      color: var(--secondary-text);
+      margin-bottom: 1.5rem;
+    }
+
+    .message strong {
+      color: var(--primary-text);
+    }
+
+    .qr-container {
+      display: flex;
+      justify-content: center;
+      margin: 1.5rem 0;
+    }
+
+    #qrcode {
+      padding: 1rem;
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .card-footer {
+      padding: 1.5rem 2rem;
+      text-align: center;
+      border-top: 1px solid var(--border-color);
+      background-color: var(--secondary-bg);
     }
 
     .btn {
-      margin-top: 1.5rem;
-      padding: 0.75rem 1.5rem;
-      border: none;
-      border-radius: 8px;
-      background-color: var(--accent);
-      color: #0f172a;
-      font-size: 1rem;
-      font-weight: 600;
-      cursor: pointer;
+      display: inline-block;
+      background-color: var(--accent-success);
+      color: white;
+      padding: 0.75rem 1.75rem;
+      border-radius: 6px;
+      font-weight: 500;
       text-decoration: none;
-      transition: background-color 0.3s ease;
+      transition: all 0.2s ease;
+      border: none;
+      cursor: pointer;
+      font-size: 0.95rem;
     }
 
     .btn:hover {
-      background-color: #16a34a;
+      opacity: 0.9;
+      transform: translateY(-1px);
     }
 
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
+    .processing .status-indicator {
+      background-color: rgba(148, 163, 184, 0.15);
     }
 
-    @keyframes bounce {
-      0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-10px); }
+    .processing .status-icon {
+      color: #94a3b8;
+    }
+
+    .success .status-indicator {
+      background-color: rgba(14, 165, 233, 0.15);
+    }
+
+    .success .status-icon {
+      color: var(--accent-success);
+    }
+
+    .success h1 {
+      color: var(--accent-success);
+    }
+
+    .promotion .status-indicator {
+      background-color: rgba(129, 140, 248, 0.15);
+    }
+
+    .promotion .status-icon {
+      color: var(--accent-promotion);
+    }
+
+    .promotion h1 {
+      color: var(--accent-promotion);
+    }
+
+    .error .status-indicator {
+      background-color: rgba(244, 63, 94, 0.15);
+    }
+
+    .error .status-icon {
+      color: var(--accent-error);
+    }
+
+    .error h1 {
+      color: var(--accent-error);
+    }
+
+    .company-logo {
+      position: absolute;
+      top: 1.5rem;
+      left: 1.5rem;
+      font-weight: 600;
+      font-size: 1.25rem;
+      color: var(--primary-text);
+      display: flex;
+      align-items: center;
+    }
+
+    .logo-dot {
+      width: 8px;
+      height: 8px;
+      background-color: var(--accent-success);
+      border-radius: 50%;
+      margin-right: 8px;
+      display: inline-block;
+    }
+
+    .reference {
+      font-size: 0.875rem;
+      color: var(--secondary-text);
+      margin-top: 1rem;
+      font-weight: 400;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      padding: 0.375rem 0.75rem;
+      border-radius: 100px;
+      margin-top: 0.75rem;
+      font-weight: 500;
+    }
+
+    .success .badge {
+      background-color: rgba(14, 165, 233, 0.15);
+      color: var(--accent-success);
+    }
+
+    .promotion .badge {
+      background-color: rgba(129, 140, 248, 0.15);
+      color: var(--accent-promotion);
+    }
+
+    .error .badge {
+      background-color: rgba(244, 63, 94, 0.15);
+      color: var(--accent-error);
+    }
+
+    @media (max-width: 640px) {
+      .card {
+        box-shadow: none;
+      }
+      
+      .company-logo {
+        position: static;
+        margin-bottom: 1.5rem;
+        display: block;
+        text-align: center;
+        justify-content: center;
+      }
+      
+      .card-header {
+        padding: 1.5rem 1rem;
+      }
+      
+      .card-body, .card-footer {
+        padding: 1.25rem 1rem;
+      }
     }
   </style>
 </head>
 <body>
-  <div id="emoji">🎉</div>
-  <h1>Congratulations!</h1>
-  <h2>You've been promoted to<br>Master of Ceremonies</h2>
-  <p id="message">
-    Dear User, we're thrilled to announce your promotion!<br />
-    You now have the ability to <strong>host</strong> and <strong>manage events</strong> on our platform.<br/>
-    Get ready to lead with energy, confidence, and style ✨
-  </p>
+  <div class="card processing" id="status-card">
+    <div class="card-header">
+      <div class="company-logo"><span class="logo-dot"></span>Zyra Moments</div>
+      <div class="status-indicator">
+        <span class="status-icon" id="emoji">🕒</span>
+      </div>
+      <h1 id="title">Processing Payment</h1>
+      <h2 id="subtitle">Please wait while we confirm your transaction.</h2>
+      <div class="badge" id="status-badge">Processing</div>
+    </div>
+    
+    <div class="card-body">
+      <p class="message" id="message">
+        Your payment is being processed. This should only take a moment.
+      </p>
+      <div class="qr-container">
+        <div id="qrcode"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const purpose = urlParams.get('purpose');
+    const statusCard = document.getElementById('status-card');
+    const statusBadge = document.getElementById('status-badge');
+
+    document.addEventListener('DOMContentLoaded', () => {
+      if (purpose === "master_of_ceremony") {
+        statusCard.className = "card promotion";
+        document.getElementById('emoji').textContent = '🏆';
+        document.getElementById('title').textContent = "Promotion Confirmed";
+        document.getElementById('subtitle').innerHTML = "You are now a Master of Ceremonies";
+        statusBadge.textContent = "Promotion";
+        document.getElementById('message').innerHTML = `
+          <strong>Congratulations on your promotion!</strong><br><br>
+          Your account has been upgraded to Master of Ceremonies status. You now have access to advanced event hosting and management features on our platform.<br><br>
+          Your new privileges are effective immediately.
+        `;
+      } else if (purpose == "vendor_booking") {
+        statusCard.className = "card success";
+        document.getElementById('emoji').textContent = '✓';
+        document.getElementById('title').textContent = "Booking Confirmed";
+        document.getElementById('subtitle').innerHTML = "Your vendor booking has been processed successfully";
+        statusBadge.textContent = "Confirmed";
+        document.getElementById('message').innerHTML = `
+          <strong>Thank you for your booking.</strong><br><br>
+          We have received your payment and your vendor booking has been confirmed. A confirmation email with all the details has been sent to your registered email address.<br><br>
+          Our team will contact you within 24 hours to discuss the next steps.
+        `;
+      } else if (purpose == "event_booking") {
+        statusCard.className = "card success";
+        document.getElementById('emoji').textContent = '✓';
+        document.getElementById('title').textContent = "Event Booking Confirmed";
+        document.getElementById('subtitle').innerHTML = "Your ticket has been issued successfully";
+        statusBadge.textContent = "Confirmed";
+        document.getElementById('message').innerHTML = `
+          <strong>Your event booking is confirmed.</strong><br><br>
+          Please scan the QR code below to access your digital ticket. We recommend saving it to your mobile device for convenient access on the event day.
+        `;
+
+        const eventId = urlParams.get('event_id'); 
+        if (eventId) {
+          new QRCode(document.getElementById("qrcode"), {
+            text: "Your qr code",
+            width: 180,
+            height: 180,
+          });
+        } else {
+          document.getElementById("qrcode").innerText = "Event ID not found";
+        }
+      } else {
+        statusCard.className = "card error";
+        document.getElementById('emoji').textContent = '!';
+        document.getElementById('title').textContent = "Transaction Failed";
+        document.getElementById('subtitle').innerHTML = "We encountered an issue with your request";
+        statusBadge.textContent = "Failed";
+        document.getElementById('message').innerHTML = `
+          <strong>We were unable to process your transaction.</strong><br><br>
+          There was an issue with your booking or payment. This could be due to network issues, insufficient funds, or an issue with our payment processor.<br><br>
+          Please try again or contact our support team for immediate assistance.
+        `;
+      }
+    })
+  </script>
 </body>
 </html>
