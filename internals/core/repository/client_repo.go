@@ -78,6 +78,12 @@ type ClientRepository interface {
 	CreateQRCode(ctx context.Context, qr *clientModel.QR) error
 	RefundAmount(ctx context.Context, adminEmail string, clientID string, amount int) error
 	GetBookingCount(ctx context.Context, clientID string) (int, error)
+	UpdateTicket(ctx context.Context, eventID, status string) error
+	GetTicketsByClientID(ctx context.Context, clientID string) ([]clientModel.Ticket, error)
+	GetEventNameByID(ctx context.Context, eventID string) (string, error)
+	GetTicketsByEventID(ctx context.Context, eventID string) ([]clientModel.Ticket, error)
+	GetEventPrice(ctx context.Context, eventID string) (float64, error)
+	CreateFundRelease(ctx context.Context, req *adminModel.FundRelease) error
 }
 
 func NewClientRepository(db *gorm.DB) ClientRepository {
@@ -808,4 +814,59 @@ func (r *ClientStorage) GetBookingCount(ctx context.Context, clientID string) (i
 	}
 
 	return int(count), nil
+}
+
+func (r *ClientStorage) UpdateTicket(ctx context.Context, eventID, status string) error {
+	return r.DB.Model(&clientModel.Ticket{}).Where("event_id = ?", eventID).Update("status", status).Error
+}
+
+func (r *ClientStorage) GetTicketsByClientID(ctx context.Context, clientID string) ([]clientModel.Ticket, error) {
+	var tickets []clientModel.Ticket
+	err := r.DB.WithContext(ctx).
+		Where("client_id = ?", clientID).
+		Find(&tickets).Error
+	if err != nil {
+		return nil, err
+	}
+	return tickets, nil
+}
+
+func (r *ClientStorage) GetEventNameByID(ctx context.Context, eventID string) (string, error) {
+	var event clientModel.Event
+	err := r.DB.WithContext(ctx).
+		Select("title").
+		Where("event_id = ?", eventID).
+		First(&event).Error
+	if err != nil {
+		return "", err
+	}
+	return event.Title, nil
+}
+
+func (r *ClientStorage) GetTicketsByEventID(ctx context.Context, eventID string) ([]clientModel.Ticket, error) {
+	var tickets []clientModel.Ticket
+	err := r.DB.WithContext(ctx).
+		Where("event_id = ?", eventID).
+		Find(&tickets).Error
+	if err != nil {
+		return nil, err
+	}
+	return tickets, nil
+}
+
+func (r *ClientStorage) GetEventPrice(ctx context.Context, eventID string) (float64, error) {
+	var PricePerTicket float64
+
+	var eventDetails clientModel.EventDetails
+
+	err := r.DB.WithContext(ctx).Model(&eventDetails).Where("event_id = ?", eventID).Scan(&PricePerTicket).Error
+	if err != nil {
+		return 0, err
+	}
+
+	return PricePerTicket, nil
+}
+
+func (r *ClientStorage) CreateFundRelease(ctx context.Context, req *adminModel.FundRelease) error {
+	return r.DB.WithContext(ctx).Create(&req).Error
 }

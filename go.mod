@@ -3,14 +3,15 @@ module github.com/AthulKrishna2501/zyra-client-service
 go 1.24.2
 
 require (
-	github.com/AthulKrishna2501/proto-repo v0.0.0-20250427181257-1c36532bfabf
-	github.com/AthulKrishna2501/zyra-admin-service v0.0.0-20250426171312-2130ac80d7f0
+	github.com/AthulKrishna2501/proto-repo v0.0.0-20250501085338-cb18ab149e94
+	github.com/AthulKrishna2501/zyra-admin-service v0.0.0-20250501075222-e29a5b8fd6fa
 	github.com/AthulKrishna2501/zyra-auth-service v0.0.0-20250423072851-8d3be65bee5c
-	github.com/AthulKrishna2501/zyra-vendor-service v0.0.0-20250426063748-e64c46705db3
+	github.com/AthulKrishna2501/zyra-vendor-service v0.0.0-20250430042754-c4c9512c4341
 	github.com/cloudinary/cloudinary-go/v2 v2.9.1
 	github.com/gin-gonic/gin v1.10.0
 	github.com/google/uuid v1.6.0
 	github.com/sirupsen/logrus v1.9.3
+	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/spf13/viper v1.20.0
 	github.com/stripe/stripe-go/v76 v76.25.0
 	golang.org/x/crypto v0.36.0
@@ -48,7 +49,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/sagikazarmark/locafero v0.7.0 // indirect
-	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e // indirect
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.12.0 // indirect
 	github.com/spf13/cast v1.7.1 // indirect

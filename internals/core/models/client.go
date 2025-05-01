@@ -72,6 +72,7 @@ type Ticket struct {
 	TicketID  string    `gorm:"type:varchar(255);unique;not null"`
 	ClientID  uuid.UUID `gorm:"type:uuid;not null"`
 	EventID   uuid.UUID `gorm:"type:uuid;not null"`
+	Status    string    `gorm:"type:varchar(255)"`
 	CreatedAt time.Time `gorm:"default:current_timestamp"`
 	UpdatedAt time.Time `gorm:"default:current_timestamp"`
 }

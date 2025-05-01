@@ -392,6 +392,7 @@ func (s *ClientService) HandleStripeEvent(ctx context.Context, req *pb.StripeWeb
 				TicketID:  ticketID.String(),
 				ClientID:  userIdUUID,
 				EventID:   eventUUID,
+				Status:    "booked",
 				CreatedAt: time.Now(),
 				UpdatedAt: time.Now(),
 			}
@@ -786,56 +787,6 @@ func (s *ClientService) GetBookings(ctx context.Context, req *pb.GetBookingsRequ
 	}, nil
 }
 
-// func (s *ClientService) BookVendor(ctx context.Context, req *pb.BookVendorRequest) (*pb.BookVendorResponse, error) {
-// 	clientID := req.GetClientId()
-// 	vendorID := req.GetVendorId()
-// 	serviceID := req.GetServiceId()
-// 	date := req.GetDate().AsTime()
-
-// 	isServiceAvailable, err := s.clientRepo.IsVendorServiceAvailable(ctx, vendorID, service)
-// 	if err != nil {
-// 		s.log.Error("Failed to validate vendor service: %v", err)
-// 		return nil, status.Errorf(codes.Internal, "Failed to validate vendor service: %v", err)
-// 	}
-// 	if !isServiceAvailable {
-// 		return nil, status.Errorf(codes.InvalidArgument, "The vendor does not provide the requested service")
-// 	}
-
-// 	isDateAvailable, err := s.clientRepo.IsVendorAvailableOnDate(ctx, vendorID, date)
-// 	if err != nil {
-// 		s.log.Error("Failed to validate vendor availability: %v", err)
-// 		return nil, status.Errorf(codes.Internal, "Failed to validate vendor availability: %v", err)
-// 	}
-// 	if !isDateAvailable {
-// 		return nil, status.Errorf(codes.InvalidArgument, "The vendor is not available on the requested date")
-// 	}
-
-// 	price, err := s.clientRepo.GetServicePrice(ctx, vendorID, serviceID)
-// 	if err != nil {
-// 		s.log.Error("Failed to fetch service price: %v", err)
-// 		return nil, status.Errorf(codes.Internal, "Failed to fetch service price: %v", err)
-// 	}
-
-// 	booking := &adminModel.Booking{
-// 		ClientID: uuid.MustParse(clientID),
-// 		VendorID: uuid.MustParse(vendorID),
-// 		Service:  service,
-// 		Date:     date,
-// 		Price:    price,
-// 		Status:   "pending",
-// 	}
-
-// 	err = s.clientRepo.CreateBooking(ctx, booking)
-// 	if err != nil {
-// 		s.log.Error("Failed to create booking: %v", err)
-// 		return nil, status.Errorf(codes.Internal, "Failed to create booking: %v", err)
-// 	}
-
-// 	return &pb.BookVendorResponse{
-// 		Message: "Booking created successfully",
-// 	}, nil
-// }
-
 func (s *ClientService) GetVendorsByCategory(ctx context.Context, req *pb.GetVendorsByCategoryRequest) (*pb.GetVendorsByCategoryResponse, error) {
 	category := req.GetCategory()
 
@@ -909,8 +860,8 @@ func (s *ClientService) GetHostedEvents(ctx context.Context, req *pb.GetHostedEv
 			},
 			Date:           timestamppb.New(event.Date),
 			Description:    detail.Description,
-			StartTime:      detail.StartTime.Format("15:04"),
-			EndTime:        detail.EndTime.Format("15:04"),
+			StartTime:      timestamppb.New(detail.StartTime),
+			EndTime:        timestamppb.New(detail.EndTime),
 			PricePerTicket: int32(detail.PricePerTicket),
 			TicketLimit:    int32(detail.TicketLimit),
 		})
@@ -1259,4 +1210,139 @@ func (s *ClientService) CancelVendorBooking(ctx context.Context, req *pb.CancelV
 	return &pb.CancelVendorBookingResponse{
 			Message: "Vendor booking cancelled "},
 		nil
+}
+
+func (s *ClientService) CancelEvent(ctx context.Context, req *pb.CancelEventRequest) (*pb.CancelEventResponse, error) {
+	clientUUID, err := uuid.Parse(req.GetClientId())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to parse clien_id")
+	}
+
+	eventUUID, err := uuid.Parse(req.GetEventId())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to parse event_id")
+	}
+	eventAmount, err := s.clientRepo.GetEventAmount(ctx, req.GetEventId())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to fetch event amount: %v", err)
+	}
+
+	newTransaction := &models.Transaction{
+		UserID:        clientUUID,
+		Purpose:       "Cancel Event Booking",
+		AmountPaid:    int(eventAmount),
+		PaymentMethod: "wallet",
+		DateOfPayment: time.Now(),
+		PaymentStatus: "refunded",
+	}
+
+	newAdminWalletTransaction := &adminModel.AdminWalletTransaction{
+		Date:   time.Now(),
+		Type:   "Cancel Event Booking",
+		Amount: eventAmount,
+		Status: "withdrawn",
+	}
+
+	err = s.clientRepo.CreateTransaction(ctx, newTransaction)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to create transaction: %v", err)
+	}
+
+	err = s.clientRepo.CreateAdminWalletTransaction(ctx, newAdminWalletTransaction)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to create admin wallet transaction")
+	}
+
+	err = s.clientRepo.RefundAmount(ctx, s.config.ADMIN_EMAIL, clientUUID.String(), int(eventAmount))
+
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to refund amount %v", err)
+	}
+
+	err = s.clientRepo.UpdateTicket(ctx, eventUUID.String(), "cancelled")
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to update booking status: %v", err)
+	}
+
+	return &pb.CancelEventResponse{
+			Message: "Event booking cancelled successfully"},
+		nil
+}
+
+func (s *ClientService) GetBookedTickets(ctx context.Context, req *pb.GetBookedTicketsRequest) (*pb.GetBookedTicketsResponse, error) {
+	clientID := req.GetClientId()
+
+	tickets, err := s.clientRepo.GetTicketsByClientID(ctx, clientID)
+	if err != nil {
+		s.log.Error("Failed to fetch booked tickets: %v", err)
+		return nil, status.Errorf(codes.Internal, "Failed to fetch booked tickets: %v", err)
+	}
+
+	var ticketList []*pb.TicketDetails
+	for _, ticket := range tickets {
+		eventName, err := s.clientRepo.GetEventNameByID(ctx, ticket.EventID.String())
+		if err != nil {
+			s.log.Error("Failed to fetch event name for ticket: %v", err)
+			return nil, status.Errorf(codes.Internal, "Failed to fetch event name for ticket: %v", err)
+		}
+
+		ticketList = append(ticketList, &pb.TicketDetails{
+			TicketId:  ticket.TicketID,
+			EventId:   ticket.EventID.String(),
+			EventName: eventName,
+			Status:    ticket.Status,
+			Date:      timestamppb.New(ticket.CreatedAt),
+		})
+	}
+
+	return &pb.GetBookedTicketsResponse{
+		TicketDetails: ticketList,
+	}, nil
+}
+
+func (s *ClientService) RequestFundRelease(ctx context.Context, req *pb.FundReleaseRequest) (*pb.FundReleaseResponse, error) {
+	eventUUID, err := uuid.Parse(req.GetEventId())
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to parse event_id")
+	}
+	eventName, err := s.clientRepo.GetEventNameByID(ctx, eventUUID.String())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to fetch event name: %v", err)
+	}
+
+	tickets, err := s.clientRepo.GetTicketsByEventID(ctx, eventUUID.String())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to fetch tickets for event: %v", err)
+	}
+
+	ticketPrice, err := s.clientRepo.GetEventAmount(ctx, eventUUID.String())
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to fetch ticket price: %v", err)
+	}
+
+	var totalAmount int
+	var ticketsSold int
+	for _, ticket := range tickets {
+		if ticket.Status != "cancelled" {
+			totalAmount += int(ticketPrice)
+			ticketsSold++
+		}
+	}
+
+	fundReleaseRequest := &adminModel.FundRelease{
+		EventID:   eventUUID,
+		EventName: eventName,
+		Amount:    ticketPrice,
+		Tickets:   uint(ticketsSold),
+		Status:    "pending",
+	}
+
+	err = s.clientRepo.CreateFundRelease(ctx, fundReleaseRequest)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to create fund release request %v", err)
+	}
+
+	return &pb.FundReleaseResponse{
+		Message: "Request sent successfully",
+	}, nil
 }
