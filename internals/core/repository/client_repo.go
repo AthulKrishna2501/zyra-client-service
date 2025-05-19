@@ -675,9 +675,12 @@ func (r *ClientStorage) ReleasePaymentToVendor(ctx context.Context, vendorID str
 	adminWallet.Balance -= price
 	adminWallet.TotalWithdrawals += price
 
-	if err := tx.Save(&adminWallet).Error; err != nil {
+	if err := tx.Model(&vendorWallet).Updates(map[string]interface{}{
+		"wallet_balance": vendorWallet.WalletBalance,
+		"total_deposits": vendorWallet.TotalDeposits,
+	}).Error; err != nil {
 		tx.Rollback()
-		return err
+		return fmt.Errorf("failed to update vendor wallet: %w", err)
 	}
 
 	vendorTransaction := clientModel.Transaction{
