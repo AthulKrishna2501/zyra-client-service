@@ -627,29 +627,42 @@ func (r *ClientStorage) ReleasePaymentToVendor(ctx context.Context, vendorID str
 	var vendorWallet vendorModel.Wallet
 	vendorUUID, err := uuid.Parse(vendorID)
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid vendor ID: %w", err)
 	}
 
 	tx := r.DB.WithContext(ctx).Begin()
 
 	err = tx.Where("vendor_id = ?", vendorUUID).First(&vendorWallet).Error
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		vendorWallet = vendorModel.Wallet{
+			VendorID:         vendorUUID,
+			WalletBalance:    0,
+			TotalDeposits:    0,
+			TotalWithdrawals: 0,
+		}
+		if err := tx.Create(&vendorWallet).Error; err != nil {
+			tx.Rollback()
+			return fmt.Errorf("failed to create vendor wallet: %w", err)
+		}
+	} else if err != nil {
 		tx.Rollback()
-		return err
+		return fmt.Errorf("failed to fetch vendor wallet: %w", err)
 	}
 
 	vendorWallet.WalletBalance += int64(price)
 	vendorWallet.TotalDeposits += int64(price)
 
-	err = tx.Save(&vendorWallet).Error
-	if err != nil {
+	if err := tx.Save(&vendorWallet).Error; err != nil {
 		tx.Rollback()
-		return err
+		return fmt.Errorf("failed to update vendor wallet: %w", err)
 	}
 
 	var adminWallet adminModel.AdminWallet
 	err = tx.Where("email = ?", "admin@example.com").First(&adminWallet).Error
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		tx.Rollback()
+		return fmt.Errorf("admin wallet not found")
+	} else if err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -662,8 +675,7 @@ func (r *ClientStorage) ReleasePaymentToVendor(ctx context.Context, vendorID str
 	adminWallet.Balance -= price
 	adminWallet.TotalWithdrawals += price
 
-	err = tx.Where("email = ?", "admin@example.com").Save(&adminWallet).Error
-	if err != nil {
+	if err := tx.Save(&adminWallet).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -676,8 +688,7 @@ func (r *ClientStorage) ReleasePaymentToVendor(ctx context.Context, vendorID str
 		PaymentStatus: "completed",
 		DateOfPayment: time.Now(),
 	}
-	err = tx.Create(&vendorTransaction).Error
-	if err != nil {
+	if err := tx.Create(&vendorTransaction).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
@@ -688,8 +699,7 @@ func (r *ClientStorage) ReleasePaymentToVendor(ctx context.Context, vendorID str
 		Amount: price,
 		Status: "withdrawn",
 	}
-	err = tx.Create(&adminTransaction).Error
-	if err != nil {
+	if err := tx.Create(&adminTransaction).Error; err != nil {
 		tx.Rollback()
 		return err
 	}
