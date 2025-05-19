@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
@@ -509,7 +510,7 @@ func (r *ClientStorage) DeleteReview(ctx context.Context, reviewID string) error
 }
 
 func (r *ClientStorage) GetVendorAverageRating(ctx context.Context, vendorID string) (float64, error) {
-	var avg float64
+	var avg sql.NullFloat64
 	err := r.DB.WithContext(ctx).
 		Table("reviews").
 		Select("AVG(rating)").
@@ -519,7 +520,11 @@ func (r *ClientStorage) GetVendorAverageRating(ctx context.Context, vendorID str
 	if err != nil {
 		return 0, err
 	}
-	return avg, nil
+
+	if avg.Valid {
+		return avg.Float64, nil
+	}
+	return 0, nil
 }
 
 func (r *ClientStorage) VendorExists(ctx context.Context, vendorID string) (bool, error) {

@@ -35,7 +35,7 @@ func main() {
 	err = grpc.StartgRPCServer(ClientRepo, log, configEnv)
 
 	if err != nil {
-		log.Error("Faile to start gRPC server", err)
+		log.Error("Failed to start gRPC server", err)
 		return
 	}
 
